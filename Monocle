@@ -1,0 +1,122 @@
+library(monocle)
+Mon_Mcro_monocle <- subset(Mon_Mcro,cell_type %in% c("CD14+CD16-_S100A9_Mon","CD14+_NRG1_Mon","CD16+_TCF7L2_Mø","HLA-DPB1_Mø","CD16+_LST1_Mø"))
+
+ #导入注释好的seurat对象（已注释）
+##提取表型信息--细胞信息(建议载入细胞的聚类或者细胞类型鉴定信息、实验条件等信息)
+expr_matrix <- as(as.matrix(Mon_Mcro_monocle@assays$RNA@counts), 'sparseMatrix')
+##提取表型信息到p_data(phenotype_data)里面
+p_data <- Mon_Mcro_monocle@meta.data 
+p_data$celltype <- Mon_Mcro_monocle@active.ident ##整合每个细胞的细胞鉴定信息到p_data里面。如果已经添加则不必重复添加
+##提取基因信息 如生物类型、gc含量等
+f_data <- data.frame(gene_short_name = row.names(Mon_Mcro_monocle),row.names = row.names(Mon_Mcro_monocle))
+##expr_matrix的行数与f_data的行数相同(gene number), expr_matrix的列数与p_data的行数相同(cell number)
+#构建CDS对象
+pd <- new('AnnotatedDataFrame', data = p_data)
+fd <- new('AnnotatedDataFrame', data = f_data)
+#将p_data和f_data从data.frame转换AnnotatedDataFrame对象。
+cds <- newCellDataSet(expr_matrix,
+                      phenoData = pd,
+                      featureData = fd,
+                      lowerDetectionLimit = 0.5,
+                      expressionFamily = negbinomial.size())
+
+#估计size factor和离散度
+cds <- estimateSizeFactors(cds)
+cds <- estimateDispersions(cds)
+
+
+
+cds <- detectGenes(cds, min_expr = 0.1) #这一操作会在fData(cds)中添加一列num_cells_expressed
+print(head(fData(cds)))#此时有13714个基因
+expressed_genes <- row.names(subset(fData(cds),
+                                    num_cells_expressed >= 10)) #过滤掉在小于10个细胞中表达的基因，还剩11095个基因
+
+
+
+#这一步输入的expressed_genes来自于步骤4。
+#⚠️⚠️后续分析使用的是该方法
+#也可输入seurat筛选出的高变基因：expressed_genes <- VariableFeatures(pbmc) 
+diff <- differentialGeneTest(cds[expressed_genes,],fullModelFormulaStr="~cell_type",cores=1)
+#~后面是表示对谁做差异分析的变量，理论上可以为p_data的任意列名
+head(diff)
+##差异表达基因作为轨迹构建的基因,差异基因的选择标准是qval<0.01,decreasing=F表示按数值增加排序
+deg <- subset(diff, qval < 0.01) #选出2829个基因
+deg <- deg[order(deg$qval,decreasing=F),]
+head(deg)
+##差异基因的结果文件保存
+write.table(deg,file="train.monocle.DEG.xls",col.names=T,row.names=F,sep="\t",quote=F)
+## 轨迹构建基因可视化
+ordergene <- rownames(deg)
+cds <- setOrderingFilter(cds, ordergene) 
+#这一步是很重要的，在我们得到想要的基因列表后，我们需要使用setOrderingFilter将它嵌入cds对象，后续的一系列操作都要依赖于这个list。
+#setOrderingFilter之后，这些基因被储存在cds@featureData@data[["use_for_ordering"]]，可以通过table(cds@featureData@data[["use_for_ordering"]])查看
+pdf("train.ordergenes.pdf")
+plot_ordering_genes(cds)
+dev.off()
+#出的图黑色的点表示用来构建轨迹的差异基因，灰色表示背景基因。红色的线是根据第2步计算的基因表达大小和离散度分布的趋势(可以看到，找到的基因属于离散度比较高的基因
+
+
+
+
+
+
+
+
+#选择的用于排序的基因数目一般在2000左右比较合适
+ordergene <- row.names(deg)[order(deg$qval)][1:400]
+
+#降维
+cds <- reduceDimension(cds, max_components = 2,
+                       method = 'DDRTree')
+
+##排列细胞
+cds <- orderCells(cds)
+#⚠️使用root_state参数可以设置拟时间轴的根，如下面的拟时间着色图中可以看出，左边是根。根据state图可以看出，根是State1，若要想把另一端设为根，可以按如下操作
+#cds <- orderCells(cds, root_state = 5) #把State5设成拟时间轴的起始
+
+pdf("train.monocle.pseudotime.pdf",width = 7,height = 7)
+plot_cell_trajectory(cds,color_by="Pseudotime", size=1,show_backbone=TRUE)
+dev.off()
+
+#细胞上色
+pdf("train.monocle.celltype.pdf",width = 7,height = 7)
+plot_cell_trajectory(cds,color_by="cell_type", size=1,show_backbone=TRUE)
+dev.off()
+
+
+###上色
+library(ggsci)
+p1=plot_cell_trajectory(cds, color_by = "cell_type") + scale_color_npg()
+p2=plot_cell_trajectory(cds, color_by = "State") + scale_color_nejm()
+colour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#98FB98","#F08080")
+p3=plot_cell_trajectory(cds, color_by = "State") + scale_color_manual(values = colour)
+p1|p2|p3
+
+#分化图
+p1 <- plot_cell_trajectory(cds, x = 1, y = 2, color_by = "celltype") + 
+  theme(legend.position='none',panel.border = element_blank()) + #去掉第一个的legend
+  scale_color_manual(values = colour) 
+p2 <- plot_complex_cell_trajectory(cds, x = 1, y = 2,
+                                   color_by = "celltype")+
+  scale_color_manual(values = colour) +
+  theme(legend.title = element_blank()) 
+p1|p2
+
+
+##细胞密度图
+library(ggpubr)
+df <- pData(cds) 
+## pData(cds)取出的是cds对象中cds@phenoData@data的内容
+View(df)
+ggplot(df, aes(Pseudotime, colour = cell_type, fill=cell_type)) +
+  geom_density(bw=0.5,size=1,alpha = 0.5)+theme_classic2()
+
+
+#基因表达
+colnames(pData(cds))
+pData(cds)$CCL5 = log2( exprs(cds)['CCL5',]+1)
+p1=plot_cell_trajectory(cds, color_by = "CCL5") + scale_color_gsea()
+pData(cds)$S100A4 = log2(exprs(cds)['S100A4',]+1)
+p2=plot_cell_trajectory(cds, color_by = "S100A4") + scale_color_gsea()
+library(patchwork)
+p1+p2
