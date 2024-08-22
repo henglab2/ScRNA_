@@ -1,0 +1,2262 @@
+library(harmony)
+
+readfunction <- function(projectname, savename){
+  a <- Read10X(data.dir = "~/Desktop/LFSdata/RA21-SM-HRR183325/outs/filtered_feature_bc_matrix")
+  scRNA <- CreateSeuratObject(counts = a, min.cells = 5, min.features = 500, project = projectname)
+  scRNA[["percent.mt"]] <- PercentageFeatureSet(scRNA, pattern = "^MT-") #计算细胞中线粒体基因比例
+  HB.genes <- c("HBA1","HBA2","HBB","HBD","HBE1","HBG1","HBG2","HBM","HBQ1","HBZ")
+  HB_m <- match(HB.genes, rownames(scRNA@assays$RNA))
+  HB.genes <- rownames(scRNA@assays$RNA)[HB_m]
+  HB.genes <- HB.genes[!is.na(HB.genes)]
+  scRNA[["percent.HB"]] <- PercentageFeatureSet(scRNA, features = HB.genes)
+  scRNA <- subset(scRNA, subset = nFeature_RNA > 500 & nFeature_RNA < 5000 & percent.mt < 7.5 & percent.HB < 3 & nCount_RNA < 20000)
+  saveRDS(scRNA, savename)
+}
+
+
+
+
+readfunction('RA21-SM_harmony', 'RA21-SM_harmony.rds')
+
+
+
+readfunction <- function(projectname, savename){
+  a <- Read10X(data.dir = "~/Desktop/GSE152805_OA/OA_118")
+  scRNA <- CreateSeuratObject(counts = a, min.cells = 5, min.features = 500, project = projectname)
+  scRNA[["percent.mt"]] <- PercentageFeatureSet(scRNA, pattern = "^MT-") #计算细胞中线粒体基因比例
+  HB.genes <- c("HBA1","HBA2","HBB","HBD","HBE1","HBG1","HBG2","HBM","HBQ1","HBZ")
+  HB_m <- match(HB.genes, rownames(scRNA@assays$RNA))
+  HB.genes <- rownames(scRNA@assays$RNA)[HB_m]
+  HB.genes <- HB.genes[!is.na(HB.genes)]
+  scRNA[["percent.HB"]] <- PercentageFeatureSet(scRNA, features = HB.genes)
+  scRNA <- subset(scRNA, subset = nFeature_RNA > 500 & nFeature_RNA < 5000 & percent.mt < 7.5 & percent.HB < 3 & nCount_RNA < 20000)
+  saveRDS(scRNA, savename)
+}
+
+readfunction('OA_118_harmony', 'OA_118_harmony.rds')
+
+OA113_SM.data <- Read10X(data.dir ="~/Desktop/GSE152805_OA/OA_113")
+OA116_SM.data <- Read10X(data.dir ="~/Desktop/GSE152805_OA/OA_116")
+OA118_SM.data <- Read10X(data.dir ="~/Desktop/GSE152805_OA/OA_118")
+
+
+
+
+##########################3.Doublet
+###RRMS_1
+RA02_SM_harmony <- NormalizeData(RA02_SM_harmony)
+RA02_SM_harmony <- ScaleData(RA02_SM_harmony)
+RA02_SM_harmony <- FindVariableFeatures(RA02_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA02_SM_harmony <- RunPCA(RA02_SM_harmony)
+RA02_SM_harmony <- FindNeighbors(RA02_SM_harmony, dims = 1:10)
+RA02_SM_harmony <- FindClusters(RA02_SM_harmony)
+RA02_SM_harmony <- RunUMAP(RA02_SM_harmony, dims = 1:10)
+DimPlot(RA02_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA02_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA02_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA02_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA02_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA02_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_741)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_741"]]
+names(doubletdata) <- rownames(RA02_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA02_SM_harmony <- AddMetaData(RA02_SM_harmony,doubletdata)
+saveRDS(RA02_SM_harmony,"RA02_SM_harmony.rds")
+
+
+
+##########################3.Doublet
+RA03_SM_harmony <- NormalizeData(RA03_SM_harmony)
+RA03_SM_harmony <- ScaleData(RA03_SM_harmony)
+RA03_SM_harmony <- FindVariableFeatures(RA03_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA03_SM_harmony <- RunPCA(RA03_SM_harmony)
+RA03_SM_harmony <- FindNeighbors(RA03_SM_harmony, dims = 1:10)
+RA03_SM_harmony <- FindClusters(RA03_SM_harmony)
+RA03_SM_harmony <- RunUMAP(RA03_SM_harmony, dims = 1:10)
+DimPlot(RA03_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA03_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA03_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA03_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA03_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA03_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_196)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_196"]]
+names(doubletdata) <- rownames(RA03_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA03_SM_harmony <- AddMetaData(RA03_SM_harmony,doubletdata)
+saveRDS(RA03_SM_harmony,"RA03_SM_harmony.rds")
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA04_SM_harmony <- NormalizeData(RA04_SM_harmony)
+RA04_SM_harmony <- ScaleData(RA04_SM_harmony)
+RA04_SM_harmony <- FindVariableFeatures(RA04_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA04_SM_harmony <- RunPCA(RA04_SM_harmony)
+RA04_SM_harmony <- FindNeighbors(RA04_SM_harmony, dims = 1:10)
+RA04_SM_harmony <- FindClusters(RA04_SM_harmony)
+RA04_SM_harmony <- RunUMAP(RA04_SM_harmony, dims = 1:10)
+DimPlot(RA04_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA04_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA04_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA04_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA04_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA04_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_123)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_123"]]
+names(doubletdata) <- rownames(RA04_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA04_SM_harmony <- AddMetaData(RA04_SM_harmony,doubletdata)
+saveRDS(RA04_SM_harmony,"RA04_SM_harmony.rds")
+
+
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA05_SM_harmony <- NormalizeData(RA05_SM_harmony)
+RA05_SM_harmony <- ScaleData(RA05_SM_harmony)
+RA05_SM_harmony <- FindVariableFeatures(RA05_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA05_SM_harmony <- RunPCA(RA05_SM_harmony)
+RA05_SM_harmony <- FindNeighbors(RA05_SM_harmony, dims = 1:10)
+RA05_SM_harmony <- FindClusters(RA05_SM_harmony)
+RA05_SM_harmony <- RunUMAP(RA05_SM_harmony, dims = 1:10)
+DimPlot(RA05_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA05_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA05_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA05_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA05_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA05_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.06_6)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.06_6"]]
+names(doubletdata) <- rownames(RA05_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA05_SM_harmony <- AddMetaData(RA05_SM_harmony,doubletdata)
+saveRDS(RA05_SM_harmony,"RA05_SM_harmony.rds")
+
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA06_SM_harmony <- NormalizeData(RA06_SM_harmony)
+RA06_SM_harmony <- ScaleData(RA06_SM_harmony)
+RA06_SM_harmony <- FindVariableFeatures(RA06_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA06_SM_harmony <- RunPCA(RA06_SM_harmony)
+RA06_SM_harmony <- FindNeighbors(RA06_SM_harmony, dims = 1:10)
+RA06_SM_harmony <- FindClusters(RA06_SM_harmony)
+RA06_SM_harmony <- RunUMAP(RA06_SM_harmony, dims = 1:10)
+DimPlot(RA06_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA06_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA06_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA06_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA06_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA06_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.03_428)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.03_428"]]
+names(doubletdata) <- rownames(RA06_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA06_SM_harmony <- AddMetaData(RA06_SM_harmony,doubletdata)
+saveRDS(RA06_SM_harmony,"RA06_SM_harmony.rds")
+
+
+
+
+
+
+
+##########################3.Doublet
+RA08_SM_harmony <- NormalizeData(RA08_SM_harmony)
+RA08_SM_harmony <- ScaleData(RA08_SM_harmony)
+RA08_SM_harmony <- FindVariableFeatures(RA08_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA08_SM_harmony <- RunPCA(RA08_SM_harmony)
+RA08_SM_harmony <- FindNeighbors(RA08_SM_harmony, dims = 1:10)
+RA08_SM_harmony <- FindClusters(RA08_SM_harmony)
+RA08_SM_harmony <- RunUMAP(RA08_SM_harmony, dims = 1:10)
+DimPlot(RA08_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA08_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA08_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA08_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA08_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA08_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.21_45)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.21_45"]]
+names(doubletdata) <- rownames(RA08_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA08_SM_harmony <- AddMetaData(RA08_SM_harmony,doubletdata)
+saveRDS(RA08_SM_harmony,"RA08_SM_harmony.rds")
+
+
+##########################3.Doublet
+RA09_SM_harmony <- NormalizeData(RA09_SM_harmony)
+RA09_SM_harmony <- ScaleData(RA09_SM_harmony)
+RA09_SM_harmony <- FindVariableFeatures(RA09_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA09_SM_harmony <- RunPCA(RA09_SM_harmony)
+RA09_SM_harmony <- FindNeighbors(RA09_SM_harmony, dims = 1:10)
+RA09_SM_harmony <- FindClusters(RA09_SM_harmony)
+RA09_SM_harmony <- RunUMAP(RA09_SM_harmony, dims = 1:10)
+DimPlot(RA09_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA09_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA09_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA09_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA09_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA09_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_1111)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_1111"]]
+names(doubletdata) <- rownames(RA09_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA09_SM_harmony <- AddMetaData(RA09_SM_harmony,doubletdata)
+saveRDS(RA09_SM_harmony,"RA09_SM_harmony.rds")
+
+
+##########################3.Doublet
+RA10_SM_harmony <- NormalizeData(RA10_SM_harmony)
+RA10_SM_harmony <- ScaleData(RA10_SM_harmony)
+RA10_SM_harmony <- FindVariableFeatures(RA10_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA10_SM_harmony <- RunPCA(RA10_SM_harmony)
+RA10_SM_harmony <- FindNeighbors(RA10_SM_harmony, dims = 1:10)
+RA10_SM_harmony <- FindClusters(RA10_SM_harmony)
+RA10_SM_harmony <- RunUMAP(RA10_SM_harmony, dims = 1:10)
+DimPlot(RA10_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA10_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA10_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA10_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA10_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA10_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_972)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_972"]]
+names(doubletdata) <- rownames(RA10_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA10_SM_harmony <- AddMetaData(RA10_SM_harmony,doubletdata)
+saveRDS(RA10_SM_harmony,"RA10_SM_harmony.rds")
+
+
+
+
+
+
+
+##########################3.Doublet
+RA11_SM_harmony <- NormalizeData(RA11_SM_harmony)
+RA11_SM_harmony <- ScaleData(RA11_SM_harmony)
+RA11_SM_harmony <- FindVariableFeatures(RA11_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA11_SM_harmony <- RunPCA(RA11_SM_harmony)
+RA11_SM_harmony <- FindNeighbors(RA11_SM_harmony, dims = 1:10)
+RA11_SM_harmony <- FindClusters(RA11_SM_harmony)
+RA11_SM_harmony <- RunUMAP(RA11_SM_harmony, dims = 1:10)
+DimPlot(RA11_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA11_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA11_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA11_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA11_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA11_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_1283)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_1283"]]
+names(doubletdata) <- rownames(RA11_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA11_SM_harmony <- AddMetaData(RA11_SM_harmony,doubletdata)
+saveRDS(RA11_SM_harmony,"RA11_SM_harmony.rds")
+
+
+
+
+
+
+
+##########################3.Doublet
+RA12_SM_harmony <- NormalizeData(RA12_SM_harmony)
+RA12_SM_harmony <- ScaleData(RA12_SM_harmony)
+RA12_SM_harmony <- FindVariableFeatures(RA12_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA12_SM_harmony <- RunPCA(RA12_SM_harmony)
+RA12_SM_harmony <- FindNeighbors(RA12_SM_harmony, dims = 1:10)
+RA12_SM_harmony <- FindClusters(RA12_SM_harmony)
+RA12_SM_harmony <- RunUMAP(RA12_SM_harmony, dims = 1:10)
+DimPlot(RA12_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA12_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA12_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA12_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA12_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA12_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_778)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_778"]]
+names(doubletdata) <- rownames(RA12_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA12_SM_harmony <- AddMetaData(RA12_SM_harmony,doubletdata)
+saveRDS(RA12_SM_harmony,"RA12_SM_harmony.rds")
+
+
+
+
+
+
+
+##########################3.Doublet
+RA13_SM_harmony <- NormalizeData(RA13_SM_harmony)
+RA13_SM_harmony <- ScaleData(RA13_SM_harmony)
+RA13_SM_harmony <- FindVariableFeatures(RA13_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA13_SM_harmony <- RunPCA(RA13_SM_harmony)
+RA13_SM_harmony <- FindNeighbors(RA13_SM_harmony, dims = 1:10)
+RA13_SM_harmony <- FindClusters(RA13_SM_harmony)
+RA13_SM_harmony <- RunUMAP(RA13_SM_harmony, dims = 1:10)
+DimPlot(RA13_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA13_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA13_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA13_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA13_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA13_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.07_11)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.07_11"]]
+names(doubletdata) <- rownames(RA13_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA13_SM_harmony <- AddMetaData(RA13_SM_harmony,doubletdata)
+saveRDS(RA13_SM_harmony,"RA13_SM_harmony.rds")
+
+
+
+
+
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA14_SM_harmony <- NormalizeData(RA14_SM_harmony)
+RA14_SM_harmony <- ScaleData(RA14_SM_harmony)
+RA14_SM_harmony <- FindVariableFeatures(RA14_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA14_SM_harmony <- RunPCA(RA14_SM_harmony)
+RA14_SM_harmony <- FindNeighbors(RA14_SM_harmony, dims = 1:10)
+RA14_SM_harmony <- FindClusters(RA14_SM_harmony)
+RA14_SM_harmony <- RunUMAP(RA14_SM_harmony, dims = 1:10)
+DimPlot(RA14_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA14_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA14_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA14_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA14_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA14_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_6516)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_6516"]]
+names(doubletdata) <- rownames(RA14_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA14_SM_harmony <- AddMetaData(RA14_SM_harmony,doubletdata)
+saveRDS(RA14_SM_harmony,"RA14_SM_harmony.rds")
+
+
+
+
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA16_SM_harmony <- NormalizeData(RA16_SM_harmony)
+RA16_SM_harmony <- ScaleData(RA16_SM_harmony)
+RA16_SM_harmony <- FindVariableFeatures(RA16_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA16_SM_harmony <- RunPCA(RA16_SM_harmony)
+RA16_SM_harmony <- FindNeighbors(RA16_SM_harmony, dims = 1:10)
+RA16_SM_harmony <- FindClusters(RA16_SM_harmony)
+RA16_SM_harmony <- RunUMAP(RA16_SM_harmony, dims = 1:10)
+DimPlot(RA16_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA16_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA16_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA16_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA16_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA16_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.01_38)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.01_38"]]
+names(doubletdata) <- rownames(RA16_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA16_SM_harmony <- AddMetaData(RA16_SM_harmony,doubletdata)
+saveRDS(RA16_SM_harmony,"RA16_SM_harmony.rds")
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA17_SM_harmony <- NormalizeData(RA17_SM_harmony)
+RA17_SM_harmony <- ScaleData(RA17_SM_harmony)
+RA17_SM_harmony <- FindVariableFeatures(RA17_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA17_SM_harmony <- RunPCA(RA17_SM_harmony)
+RA17_SM_harmony <- FindNeighbors(RA17_SM_harmony, dims = 1:10)
+RA17_SM_harmony <- FindClusters(RA17_SM_harmony)
+RA17_SM_harmony <- RunUMAP(RA17_SM_harmony, dims = 1:10)
+DimPlot(RA17_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA17_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA17_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA17_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA17_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA17_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.26_729)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.26_729"]]
+names(doubletdata) <- rownames(RA17_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA17_SM_harmony <- AddMetaData(RA17_SM_harmony,doubletdata)
+saveRDS(RA17_SM_harmony,"RA17_SM_harmony.rds")
+
+
+
+
+
+
+
+
+
+##########################3.Doublet
+RA18_SM_harmony <- NormalizeData(RA18_SM_harmony)
+RA18_SM_harmony <- ScaleData(RA18_SM_harmony)
+RA18_SM_harmony <- FindVariableFeatures(RA18_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA18_SM_harmony <- RunPCA(RA18_SM_harmony)
+RA18_SM_harmony <- FindNeighbors(RA18_SM_harmony, dims = 1:10)
+RA18_SM_harmony <- FindClusters(RA18_SM_harmony)
+RA18_SM_harmony <- RunUMAP(RA18_SM_harmony, dims = 1:10)
+DimPlot(RA18_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA18_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA18_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA18_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA18_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA18_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_1087)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_1087"]]
+names(doubletdata) <- rownames(RA18_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA18_SM_harmony <- AddMetaData(RA18_SM_harmony,doubletdata)
+saveRDS(RA18_SM_harmony,"RA18_SM_harmony.rds")
+
+
+
+
+##########################3.Doublet
+RA20_SM_harmony <- NormalizeData(RA20_SM_harmony)
+RA20_SM_harmony <- ScaleData(RA20_SM_harmony)
+RA20_SM_harmony <- FindVariableFeatures(RA20_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA20_SM_harmony <- RunPCA(RA20_SM_harmony)
+RA20_SM_harmony <- FindNeighbors(RA20_SM_harmony, dims = 1:10)
+RA20_SM_harmony <- FindClusters(RA20_SM_harmony)
+RA20_SM_harmony <- RunUMAP(RA20_SM_harmony, dims = 1:10)
+DimPlot(RA20_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA20_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA20_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA20_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA20_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA20_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.01_75)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.01_75"]]
+names(doubletdata) <- rownames(RA20_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA20_SM_harmony <- AddMetaData(RA20_SM_harmony,doubletdata)
+saveRDS(RA20_SM_harmony,"RA20_SM_harmony.rds")
+
+
+
+
+
+
+
+##########################3.Doublet
+RA21_SM_harmony <- NormalizeData(RA21_SM_harmony)
+RA21_SM_harmony <- ScaleData(RA21_SM_harmony)
+RA21_SM_harmony <- FindVariableFeatures(RA21_SM_harmony, selection.method = "vst", nfeatures = 2000)
+RA21_SM_harmony <- RunPCA(RA21_SM_harmony)
+RA21_SM_harmony <- FindNeighbors(RA21_SM_harmony, dims = 1:10)
+RA21_SM_harmony <- FindClusters(RA21_SM_harmony)
+RA21_SM_harmony <- RunUMAP(RA21_SM_harmony, dims = 1:10)
+DimPlot(RA21_SM_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(RA21_SM_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- RA21_SM_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(RA21_SM_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(RA21_SM_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(RA21_SM_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.005_151)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.005_151"]]
+names(doubletdata) <- rownames(RA21_SM_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+RA21_SM_harmony <- AddMetaData(RA21_SM_harmony,doubletdata)
+saveRDS(RA21_SM_harmony,"RA21_SM_harmony.rds")
+
+
+
+
+
+
+
+
+
+##########################3.Doublet
+OA_113_harmony <- NormalizeData(OA_113_harmony)
+OA_113_harmony <- ScaleData(OA_113_harmony)
+OA_113_harmony <- FindVariableFeatures(OA_113_harmony, selection.method = "vst", nfeatures = 2000)
+OA_113_harmony <- RunPCA(OA_113_harmony)
+OA_113_harmony <- FindNeighbors(OA_113_harmony, dims = 1:10)
+OA_113_harmony <- FindClusters(OA_113_harmony)
+OA_113_harmony <- RunUMAP(OA_113_harmony, dims = 1:10)
+DimPlot(OA_113_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(OA_113_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- OA_113_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(OA_113_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(OA_113_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(OA_113_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.2_172)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.2_172"]]
+names(doubletdata) <- rownames(OA_113_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+OA_113_harmony <- AddMetaData(OA_113_harmony,doubletdata)
+saveRDS(OA_113_harmony,"OA_113_harmony.rds")
+
+
+
+
+
+
+
+
+##########################3.Doublet
+OA_116_harmony <- NormalizeData(OA_116_harmony)
+OA_116_harmony <- ScaleData(OA_116_harmony)
+OA_116_harmony <- FindVariableFeatures(OA_116_harmony, selection.method = "vst", nfeatures = 2000)
+OA_116_harmony <- RunPCA(OA_116_harmony)
+OA_116_harmony <- FindNeighbors(OA_116_harmony, dims = 1:10)
+OA_116_harmony <- FindClusters(OA_116_harmony)
+OA_116_harmony <- RunUMAP(OA_116_harmony, dims = 1:10)
+DimPlot(OA_116_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(OA_116_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- OA_116_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(OA_116_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(OA_116_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(OA_116_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.27_75)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.27_75"]]
+names(doubletdata) <- rownames(OA_116_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+OA_116_harmony <- AddMetaData(OA_116_harmony,doubletdata)
+saveRDS(OA_116_harmony,"OA_116_harmony.rds")
+
+
+
+
+
+
+
+##########################3.Doublet
+OA_118_harmony <- NormalizeData(OA_118_harmony)
+OA_118_harmony <- ScaleData(OA_118_harmony)
+OA_118_harmony <- FindVariableFeatures(OA_118_harmony, selection.method = "vst", nfeatures = 2000)
+OA_118_harmony <- RunPCA(OA_118_harmony)
+OA_118_harmony <- FindNeighbors(OA_118_harmony, dims = 1:10)
+OA_118_harmony <- FindClusters(OA_118_harmony)
+OA_118_harmony <- RunUMAP(OA_118_harmony, dims = 1:10)
+DimPlot(OA_118_harmony,label = T)+NoLegend()
+
+###########DoubletFinder
+library(DoubletFinder)
+sweep.res.list_kidney <- paramSweep_v3(OA_118_harmony, PCs = 1:20, sct = F)
+sweep.stats_kidney <- summarizeSweep(sweep.res.list_kidney, GT = FALSE)
+bcmvn_kidney <- find.pK(sweep.stats_kidney)
+mpK<-as.numeric(as.vector(bcmvn_kidney$pK[which.max(bcmvn_kidney$BCmetric)]))
+
+# 找最佳 nExp
+annotations <- OA_118_harmony@meta.data$seurat_clusters
+homotypic.prop <- modelHomotypic(annotations)
+
+DoubletRate = ncol(OA_118_harmony)*8*1e-6
+nExp_poi <- round(DoubletRate*ncol(OA_118_harmony@assays$RNA@data))
+nExp_poi.adj <- round(nExp_poi*(1-homotypic.prop))
+
+# 找 Doublet
+seurat_filterDouble <- doubletFinder_v3(OA_118_harmony, PCs = 1:50, pN = 0.25, pK = mpK, nExp = nExp_poi, reuse.pANN = FALSE, sct = F)
+table(seurat_filterDouble$DF.classifications_0.25_0.3_14)
+doubletdata <- seurat_filterDouble@meta.data[["DF.classifications_0.25_0.3_14"]]
+names(doubletdata) <- rownames(OA_118_harmony@meta.data)
+doubletdata <- as.data.frame(doubletdata)
+OA_118_harmony <- AddMetaData(OA_118_harmony,doubletdata)
+saveRDS(OA_118_harmony,"OA_118_harmony.rds")
+
+
+
+
+OA_hamony <- merge(OA_113_harmony,y= c(OA_116_harmony,OA_118_harmony),add.cell.ids = c("OA_113","OA_116","OA_118"))
+
+
+id <- c("RA02-SM_harmony","RA03-SM_harmony","RA04-SM_harmony","RA05-SM_harmony","RA06-SM_harmony","RA08-SM_harmony","RA09-SM_harmony","RA10-SM_harmony","RA11-SM_harmony","RA12-SM_harmony","RA13-SM_harmony","RA14-SM_harmony","RA16-SM_harmony","RA17-SM_harmony","RA18-SM_harmony","RA20-SM_harmony","RA21-SM_harmony")
+RA_hamony <- merge(RA02_SM_harmony,y= c(RA03_SM_harmony,RA04_SM_harmony,RA05_SM_harmony,RA06_SM_harmony,RA08_SM_harmony,RA09_SM_harmony,RA10_SM_harmony,RA11_SM_harmony,RA12_SM_harmony,RA13_SM_harmony,RA14_SM_harmony,RA16_SM_harmony,RA17_SM_harmony,RA18_SM_harmony,RA20_SM_harmony,RA21_SM_harmony),add.cell.ids =id)
+
+
+
+####donor/dataset
+
+OA_hamony$dataset <- "OA"
+RA_hamony$dataset <- "RA"
+
+RA_hamony <- merge(RA_hamony,OA_hamony)
+
+RA_hamony <- subset(RA_hamony,doubletdata %in%  "Singlet")
+#seuratObject <- RunHarmony(seuratObject, c("dataset", "donor"))
+
+
+#### Calculate the cell cycle score
+s.genes=Seurat::cc.genes.updated.2019$s.genes
+g2m.genes=Seurat::cc.genes.updated.2019$g2m.genes
+# all(s.genes %in% rownames(RA_SM@data))
+# all(g2m.genes %in% rownames(RA_SM@data))
+# sum(s.genes %in% rownames(RA_SM@data))
+# sum(g2m.genes %in% rownames(RA_SM@data))
+s.genes <- intersect(s.genes, rownames(RA_harmony))
+g2m.genes <- intersect(g2m.genes, rownames(RA_harmony))
+RA_harmony <- CellCycleScoring(object = RA_harmony, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+
+library(harmony)
+RA_harmony$dataset[RA_harmony$orig.ident == "OA_113_harmony"] <- "OA"
+RA_harmony$dataset[RA_harmony$orig.ident == "OA_116_harmony"] <- "OA"
+RA_harmony$dataset[RA_harmony$orig.ident == "OA_118_harmony"] <- "OA"
+
+library(harmony)
+DefaultAssay(RA_harmony) <- "RNA"
+RA_harmony <- NormalizeData(RA_harmony)
+RA_harmony <- FindVariableFeatures(RA_harmony, selection.method = "vst", nfeatures = 4000)
+RA_harmony <- ScaleData(RA_harmony, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+RA_harmony <- RunPCA(RA_harmony, verbose = FALSE)
+RA_harmony <- RunHarmony(RA_harmony,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(RA_harmony, ndims = 40)
+RA_harmony <- RunUMAP(RA_harmony, reduction = "harmony", dims = 1:20)
+RA_harmony <- FindNeighbors(RA_harmony, reduction = "harmony", dims = 1:20)
+RA_harmony <- FindClusters(RA_harmony, resolution = 0.9, reduction = "harmony")
+p1 <- DimPlot(RA_harmony,label = T,raster=FALSE)
+
+
+saveRDS(RA_harmony,"RA_harmony.rds")
+
+
+
+
+library(scRNAtoolVis)
+markers <- c("CD79A","CD19","CD20","CD39","GPR183","MS4A1","MZB1","JCHAIN","IGHG1","IGHG3",##B_cells
+             "CD3D","CD3G","CD4","CD8A","GZMB","SELL","CCR7",#Tcells
+             "LYZ","TIGIT","GNLY","NKG7","HLA-DQA1","CD68","CD163","MRC1","FCN1","CD14","FCGR3A",
+             "TPSAB1","MS4A2","LILRA4","LILRB4","LAMP3","CD1C","XCR1","BATF3","IRF4","COL1A1","COL3A1","CALD1","ACTA2","RGS5","MCAM","VWF","PECAM1","KRT19","EPCAM")
+
+markers <- c("CD79A","CD19","CD20","COL1A1","COL3A1","CD68","CD163","MRC1","FCN1","CD14","FCGR3A","CD3D","CD3G","CD4","CD8A","CALD1","ACTA2","RGS5","MCAM","MS4A1","MZB1","JCHAIN","IGHG1","IGHG3",##B_cells
+            "KLRD1","KLRF1","NKG7",
+             "LYZ","TIGIT","HLA-DQA1","LAMP3","CD1C","XCR1","BATF3","IRF4",
+             "TPSAB1","MS4A2","VWF","PECAM1","LILRA4","LILRB4")
+
+
+markers <- c("ACKR1","RAMP2","SELE","VWF","PECAM1",
+             "LUM","COL3A1","DCN","COL1A1","CFD",
+             "KRT14","KRT5","S100A2","CSTA","SPRR1B",
+             "CD69","CD52","CXCR4","PTPRC","HCST")
+DotPlot(Manuscript_Object,features = markers)+coord_flip()
+
+
+
+jjDotPlot(object = RA_harmony,
+          gene = markers,
+          id = 'cell_type',xtree = T,point.geom = T,
+          tile.geom = T,rescale = T,
+          rescale.min = 0,
+          rescale.max = 1)
+
+
+colors <- c("grey","grey","grey","grey","grey","grey","grey","grey","grey","grey","grey","grey","grey","grey","grey","#7BAFDE",
+            "grey","grey","grey","#7BAFDE","grey","red","pink",
+            "blue","black","grey","grey","grey","grey","grey","grey","grey","#7BAFDE")
+
+
+DimPlot(RA_harmony_named, label = T, cols = colors,repel = T,raster = F)
+
+
+DimPlot(RA_harmony_named, label = T, cols = colors,repel = T,raster = F)+
+  NoLegend()
+
+
+'#4583b3'
+
+colors <-c('#0d8a8c', '#53A85F', '#F1BB72', '#F3B1A0', '#D6E7A3', '#57C3F3', '#476D87',
+           '#E95C59', '#E59CC4', '#AB3282', '#23452F', '#BD956A', '#8C549C', '#585658',
+           '#9FA3A8', '#E0D4CA', '#5F3D69', '#C5DEBA', '#58A4C3', '#E4C755', '#F7F398',
+           '#AA9A59', '#E63863', '#E39A35', '#C1E6F3', '#6778AE', '#91D0BE', '#B53E2B',
+           '#712820', '#DCC1DD', '#CCE0F5',  '#CCC9E6', '#625D9E', '#68A180', '#3A6963',
+           '#968175',"#B84D64","#864A68","#EE7072","#E32D32","#E5D2DD","#5E549A","#8952A0","#4552A0","#384B97","#2B3B72","#911310",
+           "#384C99","#9B8E8C","#7CA878","#35A132","#6B70B0","#3D6AAA","#394D9B","#75ACC3","#20ACBD","#38509F","#959897",
+           "#F4A2A3","#F69896","#B6CCD7","#AF98B5","#E01516","#A09C9A","#F6EDEF","#FFFFFF","#7BAFDE"
+)
+
+
+
+
+###高变基因4000
+
+RA_harmony <-
+  RenameIdents(
+    RA_harmony,
+    `0` = "mon/mø",
+    `1` = "mon/mø",
+    `2` = "mon/mø",
+    `3` = "mon/mø",
+    `4` = "CD8T",
+    `5` = "CD4T",
+    `6` = "CAFs",
+    `7` = "mon/mø",
+    `8` = "mon/mø",
+    `9` = "Navie_B",
+    `10` = "CD4T",
+    `11` = "CAFs",
+    `12` = "SMC",
+    `13` = "mon/mø",
+    `14` = "Plasma_B",
+    `15` = "CAFs",
+    `16` = "NK",
+    `17` = "cDC2",
+    `18` = "mon/mø",
+    `19` = "Plasma_B",
+    `20` = "cDC1",
+    `21` = "mon/mø",
+    `22` = "Navie_B",
+    `23` = "Mast_cells",
+    `24` = "Endothelial",
+    `25` = "pDC",
+    `26` = "CD4T",
+    `27` = "mon/mø",
+    `28` = "mon/mø",
+    `29` = "CAFs",
+    `30` = "Endothelial",
+    `31` = "No1",
+    `32` = "CAFs"
+  ) 
+
+
+RA_harmony$cell_type <- Idents(RA_harmony)
+#######成纤维
+##########成纤维细胞
+
+CAFs <- subset(RA_harmony, cell_type %in% c("CAFs"))
+
+CAFs <- NormalizeData(CAFs)
+CAFs <- FindVariableFeatures(CAFs, selection.method = "vst", nfeatures = 3000)
+CAFs <- ScaleData(CAFs, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CAFs <- RunPCA(CAFs, verbose = FALSE)
+CAFs <- RunHarmony(CAFs,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(CAFs, ndims = 20)
+CAFs <- RunUMAP(CAFs, reduction = "harmony", dims = 1:10)
+CAFs <- FindNeighbors(CAFs, reduction = "harmony", dims = 1:10)
+CAFs <- FindClusters(CAFs, resolution = 0.5, reduction = "harmony")
+DimPlot(CAFs,label = T)
+DimPlot_scCustom(seurat_object = CAFs, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+saveRDS(CAFs,"CAFs0.5.rds")
+
+
+pal <- viridis(n = 10, option = "C", direction = -1)
+pal <- viridis(n = 10, option = "D")
+FeaturePlot(object = CAFs, features = c("THY1","PRG4"), cols = pal, order = T,raster = F)
+
+
+
+
+
+
+
+top5_markers <- Extract_Top_Markers(marker_dataframe = cluster_markersCAFs0_5, num_genes = 10, named_vector = FALSE,
+                                    make_unique = TRUE)
+
+Clustered_DotPlot(seurat_object = CAFs, features = top5_markers)
+# remove rownames
+AverageHeatmap(object = CAFs,
+               markerGene = top5_markers,
+               showRowNames = T)
+
+CAFs <-
+  RenameIdents(
+    CAFs,
+    `0` = "CSN1S1_LL_CAFs",
+    `1` = "CXCL12_SL_CAFs",
+    `2` = "AEBP1_SL_CAFs",
+    `3` = "MFAP5_SL_CAFs",
+    `4` = "CCL20_LL_CAFs",
+    `5` = "CHI3L2_LL_CAFs",
+    `6` = "CSN1S1_LL_CAFs",
+    `7` = "CCL18_LL_CAFs",
+    `8` = "IGLC2_LL_CAFs")
+#0    LL_CSN1S1
+#1    SL_CXCL12
+#2    SL_AEBP1
+#3    SL_MFAP5
+#4    LL_CCL20
+#5    LL_CHI3L2
+#6    LL_CSN1S1 
+#7    LL_CCL18
+#8    LL_IGLC2
+
+CAFs_RA <- subset(CAFs,dataset %in% "RA")
+CAFs$cell_type <-Idents(CAFs)
+#####缺氧情況
+Mon$seurat_clusters
+p1 <- jjDotPlot(object = fibroblast,
+          gene = c("HIF1A","VEGFA","VEGFB","VEGFC","VEGFD","MKI67","TOP2A","PDGFA","PDGFB","PDGFA","PDGFC","EGF","TGFA","EGFR","VEGFR1","VEGFR2","VEGFR3"),
+          id = 'cell_type',xtree = T,point.geom = T,split.by = "dataset",split.by.aesGroup = T,
+          tile.geom = T,rescale = T,
+          rescale.min = 0,
+          rescale.max = 1)
+p2 <- jjDotPlot(object = RA_harmony,
+          gene = c("HIF1A","VEGFA","VEGFB","VEGFC","VEGFD"),
+          id = 'seurat_clusters',xtree = T,point.geom = T,
+          tile.geom = T,rescale = T,
+          rescale.min = 0,
+          rescale.max = 1)
+
+p1+p2
+
+
+
+###差异基因
+plan("multisession", workers = 6)
+df <- FindMarkers(fibroblast, ident.1="RA", ident.2= "OA", slot="data", logfc.threshold=0.25, min.pct=0.25, test.use = "wilcox") 
+object.markers <- deg
+object.markers$names <- rownames(object.markers) #
+sig_dge.all <- subset(object.markers, p_val_adj< 0.05  & abs(avg_log2FC)>0.15) #所有差异基因 
+#View(sig_dge.all) 
+library(dplyr) 
+library(ggplot2) 
+library(ggrepel)
+object.markers$group= 0 
+for (i in 1:nrow(object.markers))
+{ if (object.markers$avg_log2FC[i] >= 1 & object.markers$p_val_adj[i] <= 0.05){ object.markers$group[i]='up' } else if(object.markers$avg_log2FC[i] <= -1 & object.markers$p_val_adj[i] <= 0.05){ object.markers$group[i]='down' } else { object.markers$group[i]='no' } } 
+
+object.markers <- object.markers %>% mutate(Difference = pct.1 - pct.2)
+ggplot(object.markers, aes(x=Difference, y=avg_log2FC)) + geom_point(size=0.5,aes(color=group)) + scale_color_manual(values=c('blue','grey','red'))+ geom_label_repel(data=subset(object.markers, group !='no'), aes(label=names), segment.size = 0.25, size=2.5)+ geom_vline(xintercept = 0.0,linetype=2)+ geom_hline(yintercept = 0,linetype=2)+ theme_classic() 
+ggsave("TopMarkerVol2.pdf", height=8, width=8)
+
+
+###----09_For_GO_and_KEGG_Analysis----####
+##数据准备
+library(topGO)
+library(Rgraphviz)
+library(pathview)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(DOSE)
+nrDEG <-diffSig
+
+geneup <- subset(object.markers,group %in%"up")
+geneup = rownames(geneup)
+geneup.df <- bitr(geneup, fromType = 'SYMBOL',
+                toType = c('ENSEMBL','ENTREZID'),
+                OrgDb = org.Hs.eg.db)
+
+
+
+###----09_1.GO_Analysis----
+columns(org.Hs.eg.db) 
+enrich.go.BPup = enrichGO(gene = geneup.df$ENTREZID,
+                          OrgDb = org.Hs.eg.db,
+                          keyType = 'ENTREZID',
+                          ont = 'BP',
+                          pvalueCutoff = 0.01,
+                          qvalueCutoff = 0.05,
+                          readable = T) 
+
+
+genedown <- subset(object.markers,group %in%"down")
+genedown = rownames(genedown)
+genedown.df <- bitr(genedown, fromType = 'SYMBOL',
+                toType = c('ENSEMBL','ENTREZID'),
+                OrgDb = org.Hs.eg.db)
+enrich.go.BPdown = enrichGO(gene = genedown.df$ENTREZID,
+                            OrgDb = org.Hs.eg.db,
+                            keyType = 'ENTREZID',
+                            ont = 'BP',
+                            pvalueCutoff = 0.01,
+                            qvalueCutoff = 0.05,
+                            readable = T) 
+
+enrich.go.BPup1 <- enrich.go.BPup@result
+enrich.go.BPdown1 <- enrich.go.BPdown@result
+enrich.go.BPup1$group <- "up"
+enrich.go.BPdown1$group <- "down"
+
+#enrich.go.BP <- merge(enrich.go.BPup1, enrich.go.BPdown1, by = "row.names", all = T)
+enrich.go.BP <- rbind(enrich.go.BPup1, enrich.go.BPdown1)
+enrich.go.BP$ratio<- enrich.go.BP$GeneRatio
+enrich.go.BP$Padj<- enrich.go.BP$p.adjust
+
+
+
+write.csv(enrich.go.BP,"enrich.go.BP.csv")
+enrich.go.BP <- read.csv("GOBP.csv",row.names = 1)
+A <- GO
+A <- enrich.go.BP
+ggplot(A,aes(reorder(Description, ratio),ratio,fill=group))+
+  geom_col()+
+  theme_bw()+
+  theme(panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.border = element_blank(),
+        legend.title = element_blank(),
+        axis.text = element_text(color="black",size=10),
+        axis.line.x = element_line(color='black'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.position = 'none')+
+  coord_flip()+
+  geom_segment(aes(y=0, yend=0,x=0,xend=18.5))+
+  geom_text(data = A[which(A$ratio>0),],aes(x=Description, y=-0.01, label=Description),
+            hjust=1, size=4)+
+  geom_text(data = A[which(A$ratio<0),],aes(x=Description, y=0.01, label=Description),
+            hjust=0, size=4)+
+  geom_text(data = A[which(A$ratio>0),],aes(label=Padj),
+            hjust=-0.1, size=4, color='red')+
+  geom_text(data = A[which(A$ratio<0),],aes(label=Padj),
+            hjust=1.1, size=4, color="red")+
+  scale_fill_manual(values = c("#1084A4",
+                               "#8D4873"))+
+  scale_x_discrete(expand = expansion(mult = c(0,0)))+
+  ylim(-0.5, 0.5)+
+  labs(x='', y='Ratio')
+
+
+
+
+
+########单核巨噬
+Mon <- subset(RA_harmony,cell_type %in% "mon/mø")
+Mon <- NormalizeData(Mon)
+Mon <- FindVariableFeatures(Mon, selection.method = "vst", nfeatures = 3000)
+Mon <- ScaleData(Mon, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+Mon <- RunPCA(Mon, verbose = FALSE)
+Mon <- RunHarmony(Mon,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(Mon, ndims = 20)
+Mon <- RunUMAP(Mon, reduction = "harmony", dims = 1:15)
+Mon <- FindNeighbors(Mon, reduction = "harmony", dims = 1:15)
+Mon <- FindClusters(Mon, resolution = 0.2)
+
+
+
+DimPlot_scCustom(seurat_object = Mon, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+DimPlot_scCustom(seurat_object = Mon, num_columns = 3, repel = T,label = T,label.box = TRUE)
+DimPlot_scCustom(seurat_object = Mon, split.by = "seurat_clusters", num_columns = 3, repel = T,label = T,label.box = TRUE)
+
+
+
+library(Seurat)
+library(ggplot2)
+library(cowplot)
+library(dplyr)
+library(ggunchull)
+library(tidydr)
+library(ggsci)
+library(Cairo)
+
+getwd()
+
+
+color = c(pal_d3("category20")(20),
+          pal_d3("category20b")(20),
+          pal_d3("category20c")(20),
+          pal_d3("category10")(10))
+
+color2=c("#FBF49A","#EEB5BA","#7E5874","#FFE2B5","#EDB073","#CE223D","#AEADD6","#91ADB9","D1D1D1","C48AB6","#99b69b")
+###nature color
+DimPlot(Mon, reduction = "umap", group.by = "cell_type",
+        cols = color2,
+        pt.size = 0.05,
+        label = T,label.box = T
+) 
+ggsave(file="tsne.pdf",width = 12,height = 9)
+
+# Set color palette
+pal <- viridis(n = 10, option = "D")
+
+# Create Plots
+FeaturePlot_scCustom(seurat_object = Mon, features =c("HLA-DQA1","HLA-DMB","HLA-E"), order = F)
+FeaturePlot_scCustom(seurat_object = Mon, features = c("HLA-DQA1","HLA-DMB","HLA-E","CTSC","CTSZ"))
+FeaturePlot_scCustom(seurat_object = Mon, features =c("HLA-DQA1","HLA-DMB","CCL3","CCL4","CCL5","CCL18","IFI27","CXCL10","CXCL8","CTSC","CTSZ","IL32"), colors_use = pal,pt.size =0.001,num_columns = 4)
+FeaturePlot_scCustom(seurat_object = marsh_mouse_micro, features = c("HLA-DQA1","HLA-DMB","CCL3","CCL4","CCL5","CCL18"), split.by = "sample_id",
+                     num_columns = 4)
+jjDotPlot(object = fibroblast,
+                gene = c("HIF1A","VEGFA","VEGFB","VEGFC","VEGFD","HLA-DRA","HLA-DQA1","HLA-DRB1","S100A8","S100A9"),split.by = 'dataset',
+          split.by.aesGroup = T,
+                id = 'cell_type',xtree = T,point.geom = T,
+                tile.geom = T,rescale = T,
+                rescale.min = 0,
+                rescale.max = 1,textSize = 1)
+jjDotPlot(object = Mon,
+          gene = c("CD68","CD163","CD14","SPP1","MMP3","CCL3","CCL4","CCL5","CCL18"),
+          id = 'cell_type',xtree = T,point.geom = T,
+          tile.geom = T,rescale = T,
+          rescale.min = 0,
+          rescale.max = 1,textSize = 0.5)
+Mon <-
+  RenameIdents(
+    Mon,
+    `0` = "mø_0",
+    `1` = "mon_0",
+    `2` = "mon_1",
+    `3` = "mø_2",
+    `4` = "mon_3",
+    `5` = "mø_1",
+    `6` = "mon_2",
+    `7` = "mø_2")
+saveRDS(Mon,"Monnamed.rds")
+
+
+
+top5_markers <- Extract_Top_Markers(marker_dataframe = cluster_markersnamed, num_genes = 7, named_vector = FALSE,
+                                    make_unique = TRUE)
+Clustered_DotPlot(seurat_object = Mon, features = top5_markers, k = 7)
+
+
+#########top200gene
+topgene <-cluster_markers_T  %>% group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+group <- data.frame(gene=topgene$gene,
+                    group=topgene$cluster)
+
+data_GO <- compareCluster(
+  gene~group, 
+  data=group, 
+  fun="enrichGO", 
+  OrgDb="org.Hs.eg.db",
+  keyType = "SYMBOL",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.05
+)
+
+data_GO_sim <- simplify(data_GO, 
+                        cutoff=0.7, 
+                        by="p.adjust", 
+                        select_fun=min)
+
+
+p1 <- dotplot(data_GO_sim, showCategory=5,font.size = 8)
+data_GO_sim_fil <- data_GO_sim@compareClusterResult
+
+
+
+
+###ggplot美化
+df_GO <- p1$data
+library(forcats)
+df_GO$Description <- as.factor(df_GO$Description)
+df_GO$Description <- fct_inorder(df_GO$Description)
+
+ggplot(df_GO, aes(Cluster, Description)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+
+#######GSEA
+Mon <- readRDS("~/RA_harmony/VariableFeatures=4000/Mon_Macro/Monnamed.rds")
+library(Seurat)
+plan("multisession", workers = 15)
+cluster.markers <- FindAllMarkers(Mon,logfc.threshold = 0.01,min.pct = 0.25)
+write.csv(cluster.markers,"cluster.markersnamed_GSEA.csv")
+
+markers_mø_0 <- subset(cluster_markersnamed_GSEA,cluster %in% "mø_0")  ##同样选取C5和C0，C3簇比较，做差异分析，这儿输出所有基因，前端可理解为C5上调，后端为C5下调基因
+markers_mø_2 <- subset(cluster_markersnamed_GSEA,cluster %in% "mø_2") 
+markers_mon_0 <- subset(cluster_markersnamed_GSEA,cluster %in% "mon_0")
+markers_mon_1 <- subset(cluster_markersnamed_GSEA,cluster %in% "mon_1")
+markers_mon_2 <- subset(cluster_markersnamed_GSEA,cluster %in% "mon_2")
+markers_mon_3 <- subset(cluster_markersnamed_GSEA,cluster %in% "mon_3")
+
+
+#markers_mø_0
+cluster.genes<- markers_mø_0 %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene,avg_log2FC) #基因按logFC排序
+ranks<- deframe(cluster.genes)
+
+mdb_c2 <- msigdbr(species = "Homo sapiens", category = "C2") ## 定义基因集，选取C2
+library(msigdbr)
+library(msigdbr) #提供MSigdb数据库基因集
+library(fgsea)
+library(dplyr)
+library(tibble)
+library(Seurat)
+mdb_c5 <- msigdbr(species = "Homo sapiens", category = "C5")## 定义基因集，选取C2
+mdb_c5 <- subset(mdb_c5,mdb_c5$gs_subcat %in% "GO:BP")
+fgsea_sets = mdb_c5 [grep("^GOBP",mdb_c5 $gs_name),] %>% split(x = .$gene_symbol, f = .$gs_name)
+
+length(fgsea_sets)
+fgseaRes<- fgsea(fgsea_sets, stats = ranks, nperm = 1000) #运行fgsea
+fgseaRes <- as.data.frame(fgseaRes)
+mø_0GSEA <- fgseaRes
+write.csv(fgseaRes,"mø_0GSEA.csv")
+
+
+########mø_2
+cluster.genes<- markers_mø_2 %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene,avg_log2FC) #基因按logFC排序
+ranks<- deframe(cluster.genes)
+
+fgseaRes<- fgsea(fgsea_sets, stats = ranks, nperm = 1000) #运行fgsea
+fgseaRes <- as.data.frame(fgseaRes)
+mø_2GSEA <- fgseaRes
+
+
+
+########mon_0
+cluster.genes<- markers_mon_0 %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene,avg_log2FC) #基因按logFC排序
+ranks<- deframe(cluster.genes)
+
+fgseaRes<- fgsea(fgsea_sets, stats = ranks, nperm = 1000) #运行fgsea
+fgseaRes <- as.data.frame(fgseaRes)
+mon_0GSEA <- fgseaRes
+
+
+
+########mon_1
+cluster.genes<- markers_mon_1 %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene,avg_log2FC) #基因按logFC排序
+ranks<- deframe(cluster.genes)
+
+fgseaRes<- fgsea(fgsea_sets, stats = ranks, nperm = 1000) #运行fgsea
+fgseaRes <- as.data.frame(fgseaRes)
+mon_1GSEA <- fgseaRes
+
+########mon_2
+cluster.genes<- markers_mon_2 %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene,avg_log2FC) #基因按logFC排序
+ranks<- deframe(cluster.genes)
+
+fgseaRes<- fgsea(fgsea_sets, stats = ranks, nperm = 1000) #运行fgsea
+fgseaRes <- as.data.frame(fgseaRes)
+mon_2GSEA <- fgseaRes
+
+########mon_3
+cluster.genes<- markers_mon_3 %>% arrange(desc(avg_log2FC)) %>% dplyr::select(gene,avg_log2FC) #基因按logFC排序
+ranks<- deframe(cluster.genes)
+
+fgseaRes<- fgsea(fgsea_sets, stats = ranks, nperm = 1000) #运行fgsea
+fgseaRes <- as.data.frame(fgseaRes)
+mon_3GSEA <- fgseaRes
+
+p <-ggplot(fgseaRes %>% as_tibble() %>% arrange(desc(NES)) %>% filter(pval < 0.05) %>% head(n= 20), aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill= NES)) +
+  coord_flip() +
+  labs(x="KEGG", y="Normalized Enrichment Score",title="KEGG gene sets NES from GSEA") ##输出差异排秩前20的条目
+pdf('GSEA-fgsea.pdf',width=8,height=5)
+print(p)
+dev.off()
+pdf('fgsea_KEGG_PRIMARY_IMMUNODEFICIENCY.pdf',width=8,height=5)
+plotEnrichment(fgsea_sets[["KEGG_PRIMARY_IMMUNODEFICIENCY"]],ranks) + labs(title="KEGG_PRIMARY_IMMUNODEFICIENCY") #对某一特定通路分析
+dev.off()
+
+library(plot1cell)
+#"VEGFR2","VEGFR1","FLT1","VEGFR1R2"
+png(filename =  'dotplot_ITGB5.png', width = 4, height = 6,units = 'in', res = 100)
+complex_dotplot_single(seu_obj = RA_harmony, feature = "ITGB5",groups = "dataset")
+dev.off()
+
+png(filename =  'dotplot_POSTN.png', width = 4, height = 6,units = 'in', res = 100)
+complex_dotplot_single(seu_obj = RA_harmony, feature = "POSTN",groups = "dataset")
+dev.off()
+
+
+png(filename =  'dotplot_CXCR4.png', width = 4, height = 6,units = 'in', res = 100)
+complex_dotplot_single(seu_obj = RA_harmony, feature = "CXCR4",groups = "dataset")
+dev.off()
+#######提取RA患者cellchat
+RA <- subset(RA_harmony, dataset %in% c('RA'))
+RA <- NormalizeData(RA)
+RA$cellchat_group <- Idents(RA)
+##提取表达矩阵和细胞分类信息
+data.input <- GetAssayData(RA, assay = "RNA", slot = "data")
+identity <- subset(RA@meta.data, select = "cellchat_group")
+cellchat <- createCellChat(object = data.input, meta = identity,  group.by = "cellchat_group")
+
+####可选CellChatDB.human, CellChatDB.mouse
+CellChatDB <- CellChatDB.human
+##下一步不出图的时候运行 dev.new()
+showDatabaseCategory(CellChatDB)
+# use Secreted Signaling for cell-cell communication analysis
+CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling")
+cellchat@DB <- CellChatDB.use #
+
+##将信号基因的表达数据进行子集化，以节省计算成本
+cellchat <- subsetData(cellchat)
+#future::plan("multiprocess", workers = 1)
+# 识别过表达基因
+cellchat <- identifyOverExpressedGenes(cellchat)
+# 识别配体-受体对
+cellchat <- identifyOverExpressedInteractions(cellchat)
+# 将配体、受体投射到PPI网络
+cellchat <- projectData(cellchat, PPI.human)
+
+##相互作用推断
+## 1、计算通信概率推断细胞互作的通信网络
+
+cellchat <- computeCommunProb(cellchat, raw.use = TRUE)
+###如果特定细胞群中只有少数细胞，则过滤掉细胞间的通信
+cellchat <- filterCommunication(cellchat, min.cells = 3)
+
+#提取推断出的细胞互作的通信网络数据框，我们提供了一个subsetCommunication 函数，
+#可以方便地访问感兴趣的推断的细胞间通信。
+
+##返回一个数据框，包含所有推断的配体/受体级别的细胞-细胞通信。设置slot.name = "netP"以访问信令路径级别的推断通信
+df.net <- subsetCommunication(cellchat)
+
+#通路级别
+dfpathway.net <- subsetCommunication(cellchat,slot.name = "netP")
+##
+#df.net <- subsetCommunication(cellchat, sources.use = c(1,2), targets.use = c(4,5)) 
+#df.net <- subsetCommunication(cellchat, signaling = c("WNT", "TGFb"))
+
+write.csv(df.net,"df.net.csv")
+##2、在信号通路水平上推断细胞间的通讯
+cellchat <- computeCommunProbPathway(cellchat)
+##汇总通信概率来计算细胞间的聚合通信网络。
+cellchat <- aggregateNet(cellchat)
+##3、计算聚合细胞互作通信网络
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+p1 <- netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+
+p1 <- netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+#左图：外周各种颜色圆圈的大小表示细胞的数量，圈越大，细胞数越多。发出箭头的细胞表达配体，
+#箭头指向的细胞表达受体。配体-受体对越多，线越粗。
+#右图：互作的概率或者强度值（强度就是概率值相加）
+
+##气泡图
+levels(cellchat@idents)
+netVisual_bubble(cellchat, sources.use = c(4,5,6,7), targets.use = c(1:3,8:14), remove.isolate = FALSE)
+
+
+##sources.use = 2 是值第二个细胞亚群
+netVisual_bubble(cellchat, sources.use =c(1:14), targets.use = c(4), remove.isolate = FALSE)
+##指定信号通路
+cellchat@netP$pathways 
+netVisual_bubble(cellchat, sources.use =c(1:14), targets.use =c(4,12),signaling =  c("VEGF", "GAS","MK"), remove.isolate = FALSE)
+netVisual_bubble(cellchat, sources.use =c(1:14), targets.use =c(4),signaling =  c("PERIOSTIN"), remove.isolate = FALSE)
+
+
+
+
+##可视化配体和受体
+## 1、计算网络中心性得分
+cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+##2、热图  使用热图可视化计算的中心性评分，允许随时识别细胞群的主要信号作用。
+netAnalysis_signalingRole_network(cellchat, signaling = "PERIOSTIN", width = 8, height = 2.5, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "SPP1", width = 8, height = 2.5, font.size = 10)
+
+##在2D空间中可视化主要的发送者(源)和接收者(目标)。
+##我们还提供了另一种直观的方式，使用散点图来可视化2D空间中的主要发送者(源)和接收者(目标)。
+
+##从所有信号通路对聚合的细胞-细胞通信网络的信号作用分析
+gg1 <- netAnalysis_signalingRole_scatter(cellchat)
+###从所有信号通路对聚合的细胞-细胞通信网络的信号作用分析
+gg2 <- netAnalysis_signalingRole_scatter(cellchat, signaling = c("VEGF", "GAS","MK","MIF"))
+gg1 + gg2
+
+##识别对某些细胞群的传出或传入信号贡献最大的信号，从所有信号通路对聚合的细胞-细胞通信网络的信号作用分析。
+
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming")
+ht1 + ht2
+
+
+
+h1 <- netVisual_heatmap(RA_cellchat)
+h2 <- netVisual_heatmap(RA_cellchat,measure = "weight")
+h1+h2
+
+
+pathways.show <-c("PERIOSTIN")
+par(mfrow=c(1,5)) 
+netVisual_heatmap(cellchat, signaling = pathways.show, color.heatmap = "Reds") 
+# save as TIL/CXCL_heatmap.pd
+
+
+
+
+
+
+
+
+
+
+CAFs_RA$cell_type <-Idents(CAFs_RA)
+########RNA速率
+library(scater) 
+library(Seurat) 
+library(SeuratData) #
+#remotes::install_github("mojaveazure/seurat-disk") 
+library(SeuratDisk) 
+library(patchwork) 
+
+###修改meta信息和细胞id
+fibroblast@meta.data <- meta
+CAFs_RA <-subset(fibroblast)
+
+
+CAFs_RA <-subset(CAFs,dataset %in% "RA") 
+DimPlot(CAFs_RA)
+
+SaveH5Seurat(CAFs_RA, filename = "CAFs_RA.h5Seurat") 
+Convert("CAFs_RA.h5Seurat", dest = "h5ad") 
+saveRDS(CAFs_RA,"CAFs_RA_newcellid.rds")
+CAFs_RA <- NormalizeData(CAFs_RA)
+
+
+
+
+CAFs_RA_9_14 <- subset(CAFs_RA,orig.ident%in% c("RA9-SM_harmony","RA14-SM_harmony"))
+CAFs_RA_9_14$cell_type <- Idents(CAFs_RA_9_14)
+SaveH5Seurat(CAFs_RA_9_14, filename = "CAFs_RA_9_14.h5Seurat") 
+Convert("CAFs_RA_9_14.h5Seurat", dest = "h5ad") 
+CAFs_RA_9_14 <- RenameCells(CAFs_RA_9_14, new.names=gsub("RA14-SM_harmony_", "", colnames(CAFs_RA_9_14)))
+CAFs_RA$seurat_clusters
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########CAFs_RA的重聚类
+
+CAFs_RA <- NormalizeData(CAFs_RA)
+CAFs_RA <- FindVariableFeatures(CAFs_RA, selection.method = "vst", nfeatures = 2300)
+CAFs_RA <- ScaleData(CAFs_RA, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CAFs_RA <- RunPCA(CAFs_RA, verbose = FALSE)
+CAFs_RA <- RunHarmony(CAFs_RA,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(CAFs_RA, ndims = 20)
+CAFs_RA <- RunUMAP(CAFs_RA, reduction = "harmony", dims = 1:10)
+CAFs_RA <- FindNeighbors(CAFs_RA, reduction = "harmony", dims = 1:10)
+CAFs_RA <- FindClusters(CAFs_RA, resolution = 0.5)
+DimPlot(CAFs_RA,label = T)
+DimPlot_scCustom(seurat_object = CAFs_RA, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+saveRDS(CAFs_RA,"CAFs_RA0.5.rds")
+
+CAFs_RA$orig.ident
+pal <- viridis(n = 10, option = "C", direction = -1)
+pal <- viridis(n = 10, option = "D")
+FeaturePlot(object = CAFs_RA, features = c("THY1","PRG4"), cols = pal, order = T,raster = F)
+jjDotPlot(object = fibroblast,
+          gene = c("ITGB5","ITGAV","FAP","ITGB1"),
+          id = 'cell_type',xtree = T,point.geom = T,split.by = 'dataset',
+          split.by.aesGroup = T,
+          tile.geom = T,rescale = T,
+          rescale.min = 0,
+          rescale.max = 1)
+
+
+#######clusterprofile
+library(dplyr)
+
+markers <- cluster_markers_T %>%
+  group_by(cluster) %>%
+  dplyr::filter(p_val_adj < 0.01)
+group <- data.frame(gene=markers$gene,
+                    group=markers$cluster)
+
+library(clusterProfiler)
+
+
+group <- data.frame(gene=markers$gene,
+                    group=markers$cluster)
+
+
+
+
+
+
+
+
+
+library(clusterProfiler)
+#########top200gene
+topgene <-cluster_markersnamed  %>% group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+group <- data.frame(gene=topgene$gene,
+                    group=topgene$cluster)
+
+data_GO <- compareCluster(
+  gene~group, 
+  data=group, 
+  fun="enrichGO", 
+  OrgDb="org.Hs.eg.db",
+  keyType = "SYMBOL",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.05
+)
+
+data_GO_sim <- simplify(data_GO, 
+                        cutoff=0.7, 
+                        by="p.adjust", 
+                        select_fun=min)
+
+
+p1 <- dotplot(data_GO_sim, showCategory=5,font.size = 8)
+data_GO_sim_fil <- data_GO_sim@compareClusterResult
+
+
+
+
+###ggplot美化
+df_GO <- p1$data
+library(forcats)
+df_GO$Description <- as.factor(df_GO$Description)
+df_GO$Description <- fct_inorder(df_GO$Description)
+
+ggplot(df_GO, aes(Description,Cluster)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+write.csv(df_GO,"df_GO.csv")
+
+
+##KEGG
+x = compareCluster(gene ~ cluster, data = markers, fun='enrichKEGG')
+
+
+############Cellchat_End_FLS
+End_FLS <- subset(RA_hamony,cell_type %in% c("",""))
+seurat_obj$cellchat_group <- Idents(seurat_obj)
+##提取表达矩阵和细胞分类信息
+data.input <- GetAssayData(seurat_obj, assay = "RNA", slot = "data")
+identity <- subset(seurat_obj@meta.data, select = "cellchat_group")
+cellchat <- createCellChat(object = data.input, meta = identity,  group.by = "cellchat_group")
+
+
+########CAFs_SL
+table(CAFs_RA$cell_type)
+CAFs_SL <-subset(CAFs, cell_type %in% c("CXCL12_SL_CAFs","AEBP1_SL_CAFs","MFAP5_SL_CAFs"))
+CAFs_SL <- NormalizeData(CAFs_SL)
+CAFs_SL <- FindVariableFeatures(CAFs_SL, selection.method = "vst", nfeatures = 3000)
+CAFs_SL <- ScaleData(CAFs_SL, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CAFs_SL <- RunPCA(CAFs_SL, verbose = FALSE)
+CAFs_SL <- RunHarmony(CAFs_SL,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(CAFs_SL, ndims = 20)
+CAFs_SL <- RunUMAP(CAFs_SL, reduction = "harmony", dims = 1:10)
+CAFs_SL <- FindNeighbors(CAFs_SL, reduction = "harmony", dims = 1:10)
+CAFs_SL <- FindClusters(CAFs_SL, resolution = 0.5, reduction = "harmony")
+DimPlot(CAFs_SL,label = T)
+DimPlot_scCustom(seurat_object = CAFs_SL, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+saveRDS(CAFs_SL,"CAFs_SL.rds")
+
+CAFs_SL <-
+  RenameIdents(
+    CAFs_SL,
+    `0` = "APOE_SL_FLS",
+    `1` = "COL1A1_SL_FLS",
+    `2` = "MMP3_SL_FLS",
+    `3` = "SFRP1_SL_FLS",
+    `4` = "MFAP5_SL_FLS",
+    `5` = "SFRP2_SL_FLS")
+saveRDS(CAFs_SL,"CAFs_SLnamed.rds")
+#########
+CAFs_SL_RA <- subset(CAFs_SL,ddataset %in% "RA")
+CAFs_SL_RA <- NormalizeData(CAFs_SL_RA)
+CAFs_SL_RA <- FindVariableFeatures(CAFs_SL_RA, selection.method = "vst", nfeatures = 3000)
+CAFs_SL_RA <- ScaleData(CAFs_SL_RA, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CAFs_SL_RA <- RunPCA(CAFs_SL_RA, verbose = FALSE)
+CAFs_SL_RA <- RunHarmony(CAFs_SL_RA,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(CAFs_SL_RA, ndims = 20)
+CAFs_SL_RA <- RunUMAP(CAFs_SL_RA, reduction = "harmony", dims = 1:10)
+CAFs_SL_RA <- FindNeighbors(CAFs_SL_RA, reduction = "harmony", dims = 1:10)
+CAFs_SL_RA <- FindClusters(CAFs_SL_RA, resolution = 0.5, reduction = "harmony")
+DimPlot(CAFs_SL_RA,label = T)
+DimPlot_scCustom(seurat_object = CAFs_SL_RA, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+
+###########
+table(CAFs$cell_type)
+CAFs_LL <-subset(CAFs, cell_type %in% c("CSN1S1_LL_CAFs","CCL20_LL_CAFs","CHI3L2_LL_CAFs","CCL18_LL_CAFs","IGLC2_LL_CAFs"))
+CAFs_LL <- NormalizeData(CAFs_LL)
+CAFs_LL <- FindVariableFeatures(CAFs_LL, selection.method = "vst", nfeatures = 3000)
+CAFs_LL <- ScaleData(CAFs_LL, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CAFs_LL <- RunPCA(CAFs_LL, verbose = FALSE)
+CAFs_LL <- RunHarmony(CAFs_LL,c("orig.ident"))#"dataset" 
+ElbowPlot(CAFs_LL, ndims = 20)
+CAFs_LL <- RunUMAP(CAFs_LL, reduction = "harmony", dims = 1:10)
+CAFs_LL <- FindNeighbors(CAFs_LL, reduction = "harmony", dims = 1:10)
+CAFs_LL <- FindClusters(CAFs_LL, resolution = 0.5, reduction = "harmony")
+DimPlot(CAFs_LL,label = T)
+DimPlot_scCustom(seurat_object = CAFs_LL, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+saveRDS(CAFs_LL,"CAFs_LL0.5.rds")
+
+
+CAFs_LL_RA <- subset(CAFs_LL,dataset%in%"RA")
+DimPlot(CAFs_LL_RA)
+
+
+
+###########
+CAFs_LL_RA <- NormalizeData(CAFs_LL_RA)
+CAFs_LL_RA <- FindVariableFeatures(CAFs_LL_RA, selection.method = "vst", nfeatures = 3000)
+CAFs_LL_RA <- ScaleData(CAFs_LL_RA, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CAFs_LL_RA <- RunPCA(CAFs_LL_RA, verbose = FALSE)
+CAFs_LL_RA <- RunHarmony(CAFs_LL_RA,c("orig.ident"))#"dataset" 
+ElbowPlot(CAFs_LL_RA, ndims = 20)
+CAFs_LL_RA <- RunUMAP(CAFs_LL_RA, reduction = "harmony", dims = 1:10)
+CAFs_LL_RA <- FindNeighbors(CAFs_LL_RA, reduction = "harmony", dims = 1:10)
+CAFs_LL_RA <- FindClusters(CAFs_LL_RA, resolution = 0.5, reduction = "harmony")
+DimPlot(CAFs_LL_RA,label = T)
+DimPlot_scCustom(seurat_object = CAFs_LL_RA, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+saveRDS(CAFs_LL_RA,"CAFs_LL_RA0.5.rds")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#############fibroblast
+fibroblast <-
+  RenameIdents(
+    CAFs,
+    `0` = "Fb_LL2",
+    `1` = "Fb_SL1",
+    `2` = "Fb_SL2",
+    `3` = "Fb_SL3",
+    `4` = "Fb_LL1",
+    `5` = "Fb_LL4",
+    `6` = "Fb_LL3",
+    `7` = "Fb_LL5",
+    `8` = "Fb_LL6")
+DimPlot(fibroblast,label = T)
+
+
+
+
+
+
+
+RA_harmony <- subset(RA_harmony_named, cell_type %in% c("mon/mø","CD8T","CD4T","Navie_B","SMC","Plasma_B","NK", "cDC2","cDC1","Mast_cells","Endothelial","pDC")) 
+RA_harmony_named <- merge(RA_harmony,fibroblastnon)
+RA_harmony_named$cellchat_group <- RA_harmony_named$cell_type
+RA$cellchat_group <- Idents(RA)
+##提取表达矩阵和细胞分类信息
+data.input <- GetAssayData(RA_harmony_named, assay = "RNA", slot = "data")
+identity <- subset(RA_harmony_named@meta.data, select = "cellchat_group")
+cellchat <- createCellChat(object = data.input, meta = identity,  group.by = "cellchat_group")
+
+####可选CellChatDB.human, CellChatDB.mouse
+CellChatDB <- CellChatDB.human
+##下一步不出图的时候运行 dev.new()
+showDatabaseCategory(CellChatDB)
+# use Secreted Signaling for cell-cell communication analysis
+CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling")
+cellchat@DB <- CellChatDB.use #
+
+##将信号基因的表达数据进行子集化，以节省计算成本
+cellchat <- subsetData(cellchat)
+#future::plan("multiprocess", workers = 1)
+# 识别过表达基因
+cellchat <- identifyOverExpressedGenes(cellchat)
+# 识别配体-受体对
+cellchat <- identifyOverExpressedInteractions(cellchat)
+# 将配体、受体投射到PPI网络
+cellchat <- projectData(cellchat, PPI.human)
+
+##相互作用推断
+## 1、计算通信概率推断细胞互作的通信网络
+
+cellchat <- computeCommunProb(cellchat, raw.use = TRUE)
+###如果特定细胞群中只有少数细胞，则过滤掉细胞间的通信
+cellchat <- filterCommunication(cellchat, min.cells = 3)
+
+#提取推断出的细胞互作的通信网络数据框，我们提供了一个subsetCommunication 函数，
+#可以方便地访问感兴趣的推断的细胞间通信。
+
+##返回一个数据框，包含所有推断的配体/受体级别的细胞-细胞通信。设置slot.name = "netP"以访问信令路径级别的推断通信
+df.net <- subsetCommunication(cellchat)
+
+#通路级别
+dfpathway.net <- subsetCommunication(cellchat,slot.name = "netP")
+##
+#df.net <- subsetCommunication(cellchat, sources.use = c(1,2), targets.use = c(4,5)) 
+#df.net <- subsetCommunication(cellchat, signaling = c("WNT", "TGFb"))
+
+write.csv(df.net,"df.net.csv")
+##2、在信号通路水平上推断细胞间的通讯
+cellchat <- computeCommunProbPathway(cellchat)
+##汇总通信概率来计算细胞间的聚合通信网络。
+cellchat <- aggregateNet(cellchat)
+##3、计算聚合细胞互作通信网络
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+p1 <- netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+
+p1 <- netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+#左图：外周各种颜色圆圈的大小表示细胞的数量，圈越大，细胞数越多。发出箭头的细胞表达配体，
+#箭头指向的细胞表达受体。配体-受体对越多，线越粗。
+#右图：互作的概率或者强度值（强度就是概率值相加）
+
+##气泡图
+levels(cellchat@idents)
+netVisual_bubble(cellchat, sources.use = c(1:5,15:21), targets.use = c(6:14),signaling =  c("TNF"), remove.isolate = FALSE)
+netVisual_bubble(cellchat, sources.use = c(6:14), targets.use = c(1:5,15:21),signaling =  c("TNF"), remove.isolate = FALSE)
+
+
+##sources.use = 2 是值第二个细胞亚群
+netVisual_bubble(cellchat, sources.use =c(1:14), targets.use = c(4), remove.isolate = FALSE)
+##指定信号通路
+cellchat@netP$pathways 
+netVisual_bubble(cellchat, sources.use =c(1:14), targets.use =c(4,12),signaling =  c("VEGF", "GAS","MK"), remove.isolate = FALSE)
+netVisual_bubble(cellchat, sources.use =c(1:14), targets.use =c(4),signaling =  c("PERIOSTIN"), remove.isolate = FALSE)
+
+
+
+cellchat@netP$pathways 
+##可视化配体和受体
+## 1、计算网络中心性得分
+cellchat <- netAnalysis_computeCentrality(cellchat, slot.name = "netP")
+##2、热图  使用热图可视化计算的中心性评分，允许随时识别细胞群的主要信号作用。
+netAnalysis_signalingRole_network(cellchat, signaling = "PERIOSTIN", width = 8, height = 2.5, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "SPP1", width = 8, height = 2.5, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "SPP1", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "MIF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "ANGPTL", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "MK", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "CXCL", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "ANNEXIN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "GALECTIN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "VISFATIN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "CCL", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "PTN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "FGF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "PTN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "SEMA3", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "PDGF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "PARs", width = 10, height = 2, font.size = 10)
+
+netAnalysis_signalingRole_network(cellchat, signaling = "EGF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "GAS", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "TNF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "MIF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "ANGPT", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "CALCR", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "PERIOSTIN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "IGF", width = 10, height = 2, font.size = 10)
+
+netAnalysis_signalingRole_network(cellchat, signaling = "TGFb", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "CHEMERIN", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "TWEAK", width = 10, height = 2, font.size = 10)
+
+netAnalysis_signalingRole_network(cellchat, signaling = "BAFF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "COMPLEMENT", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "XCR", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "CSF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "VEGF", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "CD70", width = 10, height = 2, font.size = 10)
+netAnalysis_signalingRole_network(cellchat, signaling = "EDN", width = 10, height = 2, font.size = 10)
+
+[1] "MIF"        "ANGPTL"     "MK"         "CXCL"       "SPP1"       "ANNEXIN"   
+[7] "GALECTIN"   "VISFATIN"   "CCL"        "PTN"        "FGF"        "SEMA3"     
+[13] "PROS"       "PDGF"       "PARs"       "EGF"        "GAS"        "TNF"       
+[19] "ANGPT"      "CALCR"      "PERIOSTIN"  "IGF"        "TGFb"       "CHEMERIN"  
+[25] "TWEAK"      "BAFF"       "COMPLEMENT" "XCR"        "CSF"        "VEGF"      
+[31] "CD70"       "EDN"   
+
+
+EGF
+TNF
+ANGPT
+CALCR
+IGF
+TGFb
+CHEMERIN脂肪诱导因子
+COMPLEMENT补体
+VEGF
+CD70
+##在2D空间中可视化主要的发送者(源)和接收者(目标)。
+##我们还提供了另一种直观的方式，使用散点图来可视化2D空间中的主要发送者(源)和接收者(目标)。
+
+##从所有信号通路对聚合的细胞-细胞通信网络的信号作用分析
+gg1 <- netAnalysis_signalingRole_scatter(cellchat)
+###从所有信号通路对聚合的细胞-细胞通信网络的信号作用分析
+gg2 <- netAnalysis_signalingRole_scatter(cellchat, signaling = c("VEGF", "GAS","MK","MIF"))
+gg1 + gg2
+
+##识别对某些细胞群的传出或传入信号贡献最大的信号，从所有信号通路对聚合的细胞-细胞通信网络的信号作用分析。
+
+ht1 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "outgoing")
+ht2 <- netAnalysis_signalingRole_heatmap(cellchat, pattern = "incoming")
+ht1 + ht2
+
+
+
+h1 <- netVisual_heatmap(cellchat)
+h2 <- netVisual_heatmap(cellchat,measure = "weight")
+h1+h2
+
+
+pathways.show <-c("PERIOSTIN")
+par(mfrow=c(1,5)) 
+netVisual_heatmap(cellchat, signaling = pathways.show, color.heatmap = "Reds") 
+# save as TIL/CXCL_heatmap.pd
+
+
+
+
+########cDC2
+CDC2 <- subset(RA_harmony_named,cell_type %in% "cDC2")
+CDC2 <- NormalizeData(CDC2)
+CDC2 <- FindVariableFeatures(CDC2, selection.method = "vst", nfeatures = 4500)
+CDC2 <- ScaleData(CDC2, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CDC2 <- RunPCA(CDC2, verbose = FALSE)
+CDC2 <- RunHarmony(CDC2,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(CDC2, ndims = 20)
+CDC2 <- RunUMAP(CDC2, reduction = "harmony", dims = 1:10)
+CDC2 <- FindNeighbors(CDC2, reduction = "harmony", dims = 1:10)
+CDC2 <- FindClusters(CDC2, resolution = 0.10)
+DimPlot(CDC2,label = T)
+
+
+DimPlot_scCustom(seurat_object = CDC2, split.by = "dataset", num_columns = 3, repel = T,label = F,label.box = TRUE)
+DimPlot_scCustom(seurat_object = Mon, num_columns = 3, repel = T,label = T,label.box = TRUE)
+DimPlot_scCustom(seurat_object = CDC2,split.by = "seurat_clusters", num_columns = 3, repel = T,label = T,label.box = TRUE)
+
+CDC2 <-
+  RenameIdents(
+    CDC2,
+    `0` = "cDC2_0",
+    `1` = "cDC2_1",
+    `2` = "cDC2_2",
+    `3` = "cDC2_3")
+###差异基因
+dge <- FindMarkers(CDC2, ident.1 = 'RA',ident.2 = 'OA', 
+                   group.by = 'dataset')
+
+dge.celltype <- FindMarkers(pbmc, ident.1 = 'Memory CD4 T',ident.2 = 'Naive CD4 T', 
+                            group.by = 'cell_type',logfc.threshold = 0,min.pct = 0)
+saveRDS(dge, file = "deg.rds")
+sig_dge.all <- subset(dge, p_val_adj<0.05&abs(avg_log2FC)>0.25) #所有差异基因
+write.csv(sig_dge.all,"sig_dge.all.csv")
+
+View(sig_dge.all)
+dge.celltype <- dge
+###分组可视化
+sig_dge.up <- subset(dge.celltype, p_val_adj<0.05&avg_log2FC>0.25)
+sig_dge.up <- sig_dge.up[order(sig_dge.up$avg_log2FC,decreasing = T),]
+sig_dge.up_TOP30 <- rownames(sig_dge.up[1:30,])
+sig_dge.down <- subset(dge.celltype, p_val_adj<0.05&avg_log2FC< -0.25)
+sig_dge.down <- sig_dge.down[order(sig_dge.down$avg_log2FC,decreasing = T),]
+sig_dge.down_TOP30 <- rownames(sig_dge.down[1:30,])
+diffall <-c(sig_dge.up_TOP30,sig_dge.down_TOP30) 
+
+Idents(CDC2named) <- 'dataset'
+
+matrix <- AverageExpression(object = CDC2named,assays = 'RNA',slot = "scale.data")[[1]]
+matrix <- matrix[rownames(matrix)%in%diffall,]
+#mat = scale(matrix, center = TRUE, scale = TRUE)
+#matrix[matrix>2]=2;matrix[matrix< -2]= -2
+p <- pheatmap(matrix,show_colnames =T,
+            show_rownames = T,
+            cluster_cols = T, cluster_row = T,
+            border_color = NA,
+            color = colorRampPalette(c("navy", "white", "firebrick3"))(50))
+p
+ggsave("diff_heatmap.pdf",p,width=3, height=12)
+save_pheatmap_pdf <- function(x, filename, width=4, height=8) {
+  stopifnot(!missing(x))
+  stopifnot(!missing(filename))
+  pdf(filename, width=width, height=height)
+  grid::grid.newpage()
+  grid::grid.draw(x$gtable)
+  dev.off()
+}
+save_pheatmap_pdf(p, "diff_heatmap.pdf")
+
+
+library(Seurat)
+library(patchwork)
+library(clusterProfiler)
+library(org.Mm.eg.db) ##加载小鼠
+library(org.Hs.eg.db) ##加载人类
+library(tidyverse)
+# BP, CC和MF三种通路都一起富集
+ego_ALL <- enrichGO(gene          = row.names(sig_dge.down),
+                    #universe     = row.names(dge.celltype),
+                    OrgDb         = 'org.Hs.eg.db',
+                    keyType       = 'SYMBOL',
+                    ont           = "ALL",  #设置为ALL时BP, CC, MF都计算
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.01,
+                    qvalueCutoff  = 0.05)
+ego_all <- data.frame(ego_ALL)
+write.csv(ego_ALL,'enrichGO_down.csv')
+View(ego_all)
+
+
+# 分别对BP, CC和MF进行富集
+ego_CC <- enrichGO(gene          = row.names(sig_dge.up),
+                   #universe     = row.names(dge.celltype),
+                   OrgDb         = 'org.Hs.eg.db',
+                   keyType       = 'SYMBOL',
+                   ont           = "CC",
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.01,
+                   qvalueCutoff  = 0.05)
+ego_cc <- data.frame(ego_CC)
+write.csv(ego_cc,'enrichGO_cc.csv') 
+ego_MF <- enrichGO(gene          = row.names(sig_dge.all),
+                   #universe     = row.names(dge.celltype),
+                   OrgDb         = 'org.Hs.eg.db',
+                   keyType       = 'SYMBOL',
+                   ont           = "MF",
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.01,
+                   qvalueCutoff  = 0.05)
+ego_mf <- data.frame(ego_MF)
+write.csv(ego_mf,'enrichGO_mf.csv') 
+ego_BP <- enrichGO(gene          = row.names(sig_dge.all),
+                   #universe     = row.names(dge.celltype),
+                   OrgDb         = 'org.Hs.eg.db',
+                   keyType       = 'SYMBOL',
+                   ont           = "BP",
+                   pAdjustMethod = "BH",
+                   pvalueCutoff  = 0.01,
+                   qvalueCutoff  = 0.05) 
+ego_bp <- data.frame(ego_BP)
+write.csv(ego_bp,'enrichGO_bp.csv') 
+
+
+ego_bpdown <- enrichGO_down[order(enrichGO_down$p.adjust),]
+ego_bpdown$Count <- -ego_bpdown$Count
+ego_bpdown <- ego_bpdown[1 : 20,]
+ego_bpdown$set <- "down"
+ego_bpup <- enrichGO_down[order(enrichGO_up$p.adjust),]
+ego_bpup <- ego_bpup[1 : 20,]
+ego_bpup$set <- "up"
+ego_all <- rbind(ego_bpup,ego_bpdown)
+ggplot(data=ego_all, aes(x=Description,y=Count)) + 
+  geom_bar(stat="identity", width=0.8,fill='salmon1') + 
+  coord_flip() +  xlab("GO term") + ylab("Num of Genes") + 
+  theme_bw()
+
+p <-ggplot(ego_all %>% as_tibble() %>% arrange(desc(Count)), aes(reorder(Description, Count), Count)) +
+  geom_col(aes(fill= Count)) +
+  coord_flip() +
+  labs(x="KEGG", y="Normalized Enrichment Score",title="KEGG gene sets NES from GSEA") ##输出差异排秩前20的条目
+p
+
+####
+p1 <- ggplot(goall,aes(Description, Count))+
+  geom_bar(aes(fill=group),stat = "identity")+
+  geom_text(aes(label=Count, y=Count+5),size=3)+
+  coord_flip()+
+  labs(x='',y='Gene count', title = 'GO enrichment of cluster')+
+  scale_fill_manual(values = c('#852f88',
+                               '#eb990c',
+                               '#0f8096'))+
+  theme_bw()+
+  theme(panel.grid = element_blank(),
+        legend.position = 'none',
+        axis.ticks.y = element_blank(),
+        plot.title = element_text(hjust = 0.5, size = 10),
+        axis.text.y = element_text(size=rel(0.85),colour =col),
+        plot.margin=unit(x=c(top.mar=0.2,right.mar=0.2,
+                             bottom.mar=0.2,left.mar=0.2),
+                         units="inches"))
+
+############成功可视化
+library(ggpubr)
+ggbarplot(goall, x = "Description", y = "Count",
+          fill = "group",           # change fill color by mpg_level
+          color = "white",            # Set bar border colors to white
+          palette = "jco",            # jco journal color palett. see ?ggpar
+          # sort.val = "desc",          # Sort the value in descending order
+          sort.by.groups = F,     # Don't sort inside each group
+          # x.text.angle = 90,          # Rotate vertically x axis texts
+          ylab = "Gene Number",
+          legend.title = "",
+          rotate = TRUE,
+          ggtheme = theme_classic()) + 
+  theme(legend.position = 'bottom') + guides(fill = guide_legend(ncol = 1))
+ggsave("go.pdf",p1,width = 6,height = 9)
+#####热图展示基因表达
+#计算平均表达量
+gene_cell_exp <- AverageExpression(CDC2,
+                                   features = gene,
+                                   group.by = 'orig.ident',
+                                   slot = 'data') 
+gene_cell_exp <- as.data.frame(gene_cell_exp$RNA)
+#complexheatmap作图
+mycol <- scico(100, palette = "vik")
+p1 <- pheatmap(gene_cell_exp, scale = "none", cluster_row = TRUE, cluster_col = TRUE, border = NA,
+         fontsize_number = 12, number_color = "white",
+         main = "",
+         cellwidth = 21, cellheight = 20, color = mycol)
+p1
+ggsave("pheatmap.pdf",p1)
+library(ComplexHeatmap)
+#顶部细胞类型注释
+df <- data.frame(colnames(gene_cell_exp))
+colnames(df) <- 'class'
+top_anno = HeatmapAnnotation(df = df,#细胞名/cluster
+                             border = T,
+                             show_annotation_name = F,
+                             gp = gpar(col = 'black'),
+                             col = list(class = c('Macrophage'="#9ECABE",
+                                                  'T cell'="#F6F5B4",
+                                                  'mDC'="#2F528F",
+                                                  "Neutrophil"="#E3AD68",
+                                                  "Mast"="#ACD45E")))#颜色设置
+#数据标准化缩放一下
+marker_exp <- t(scale(t(gene_cell_exp),scale = T,center = T))
+Heatmap(marker_exp,
+        cluster_rows = F,
+        cluster_columns = F,
+        show_column_names = F,
+        show_row_names = T,
+        column_title = NULL,
+        heatmap_legend_param = list(
+          title=' '),
+        col = colorRampPalette(c("#0000EF","black","#FDFE00"))(100),
+        border = 'black',
+        rect_gp = gpar(col = "black", lwd = 1),
+        row_names_gp = gpar(fontsize = 10),
+        column_names_gp = gpar(fontsize = 10),
+        top_annotation = top_anno)
+
+
+#########Fb_LL4_LL5_RA
+Fb_LL4_LL5<- subset(fibroblast,cell_type %in% c("Fb_LL4","Fb_LL5"))
+Fb_LL4_LL5$cell_type <- Idents(Fb_LL4_LL5)
+Fb_LL4_LL5 <- subset(Fb_LL4_LL5,dataset %in% "RA")
+library(harmony)
+Fb_LL4_LL5 <- NormalizeData(Fb_LL4_LL5)
+Fb_LL4_LL5 <- FindVariableFeatures(Fb_LL4_LL5, selection.method = "vst", nfeatures = 3000)
+Fb_LL4_LL5 <- ScaleData(Fb_LL4_LL5, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+Fb_LL4_LL5 <- RunPCA(Fb_LL4_LL5, verbose = FALSE)
+ElbowPlot(Mon, ndims = 20)
+Fb_LL4_LL5 <- RunUMAP(Fb_LL4_LL5, reduction = "harmony", dims = 1:15)
+Fb_LL4_LL5 <- FindNeighbors(Fb_LL4_LL5, reduction = "harmony", dims = 1:15)
+Fb_LL4_LL5 <- FindClusters(Fb_LL4_LL5, resolution = 0.2)
+DimPlot(Fb_LL4_LL5,label = T)
+
+
+
+
+
+
+
+
+
+
+
+
+###########CD4T
+
+CD4T <- subset(RA_harmony_named,cell_type %in% "CD4T")
+
+CD4T <- NormalizeData(CD4T)
+CD4T <- FindVariableFeatures(CD4T, selection.method = "vst", nfeatures = 4500)
+CD4T <- ScaleData(CD4T, verbose = F,vars.to.regress = c("S.Score", "G2M.Score"))
+CD4T <- RunPCA(CD4T, verbose = FALSE)
+CD4T <- RunHarmony(CD4T,c("orig.ident","dataset"))#"dataset" 
+ElbowPlot(CD4T, ndims = 20)
+CD4T <- RunUMAP(CD4T, reduction = "harmony", dims = 1:20)
+CD4T <- FindNeighbors(CD4T, reduction = "harmony", dims = 1:20)
+CD4T <- FindClusters(CD4T, resolution = 0.20)
+DimPlot(CD4T,label = T)
+cluster.markers <- FindAllMarkers(CD4T,logfc.threshold = 0.25,min.pct = 0.25)
+
+
+3  FOXP3  Treg
+0  GZMK
+1  AOAH
+2  CXCL13
+4  SPP1
+
+
+
