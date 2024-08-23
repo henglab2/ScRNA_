@@ -1,0 +1,1008 @@
+############克伦恩病CD----
+
+library(harmony)
+Fibroblasts_CD_GSE134809 <- NormalizeData(Fibroblasts_CD_GSE134809)
+Fibroblasts_CD_GSE134809 <- FindVariableFeatures(Fibroblasts_CD_GSE134809, selection.method = "vst", nfeatures = 2000)
+Fibroblasts_CD_GSE134809 <- ScaleData(Fibroblasts_CD_GSE134809, verbose = F)
+Fibroblasts_CD_GSE134809 <- RunPCA(Fibroblasts_CD_GSE134809, verbose = FALSE)
+Fibroblasts_CD_GSE134809 <- RunHarmony(Fibroblasts_CD_GSE134809,c("orig.ident"))#"dataset" 
+ElbowPlot(Fibroblasts_CD_GSE134809, ndims = 20)
+Fibroblasts_CD_GSE134809 <- RunUMAP(Fibroblasts_CD_GSE134809, reduction = "harmony", dims = 1:10)
+Fibroblasts_CD_GSE134809 <- FindNeighbors(Fibroblasts_CD_GSE134809, reduction = "harmony", dims = 1:10)
+Fibroblasts_CD_GSE134809 <- FindClusters(Fibroblasts_CD_GSE134809, resolution = 0.2)
+DimPlot(Fibroblasts_CD_GSE134809,label = T)
+library(scCustomize)
+mycolor<-colorRampPalette(c("#B4C4E5","firebrick3"))(30)
+mycolor<-colorRampPalette(c("blue","firebrick3"))(30)
+Plot_Density_Joint_Only(seurat_object = Fibroblasts_CD_GSE134809, 
+                        features = c("CD74", "HLA-DRA"),
+                        custom_palette = mycolor)
+plan("multisession", workers = 10)
+markers_CD<- FindAllMarkers(Fibroblasts_CD_GSE134809)
+plan("multisession", workers = 1)
+
+###细胞比例
+Cellratio <- prop.table(table(Idents(Fibroblasts_CD_GSE134809),Fibroblasts_CD_GSE134809$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+allcolour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#F08080","#8B4513","#1E90FF","#7CFC00","#FFFF00",
+            "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
+            "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
+            "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887","#98FB98")
+allcolour=c("#0000FF","#20B2AA","#FFA500","#9370DB","#DC143C","#8B4513","#F08080","#1E90FF","#7CFC00")
+p <- ggplot(Cellratio) + 
+  geom_bar(aes(x=factor(Var2,levels =c("Uninvolved","Involved")), y= Freq, fill = Var1),stat = "identity",width = 0.7,size = 0.5,colour = '#222222')+ 
+  theme_classic() +
+  labs(x='disease',y = 'Ratio')+
+  scale_fill_manual(values = allcolour)+
+  theme(panel.border = element_rect(fill=NA,color="black", size=0.5, linetype="solid"))+
+  theme(axis.title =  element_text(size=12), # 调整横纵坐标轴标题字号并设置为粗体
+        axis.text.x =   element_text(size=12)) 
+p
+
+
+###命名
+
+
+Fibroblasts_CD_GSE134809 <-
+  RenameIdents(
+    Fibroblasts_CD_GSE134809,
+    `0` = "Fb_ADAMDEC1",
+    `1` = "Fb_CHI3L1",
+    `2` = "Fb_CD74",
+    `3` = "Fb_RGS5",
+    `4` = "Fb_PLA2G2A",
+    `5` = "Fb_SOSTDC1",
+    `6` = "Fb_APOD",
+    `7` = "Fb_ADIRF",
+    `8` = "Fb_CD74")
+
+Fibroblasts_CD_GSE134809 <-
+  RenameIdents(
+    Fibroblasts_CD_GSE134809,
+    `Fb_CD74` = "Fb_CD74 (AP-Fb)")
+####亚群高表达基因热图
+top5_markers <- Extract_Top_Markers(marker_dataframe = markers_CD, num_genes = 5, named_vector = FALSE,
+                                    make_unique = TRUE)
+write.csv(markers_CD,"markers_CD.csv")
+#Clustered_DotPlot(seurat_object = Fibroblasts_CD_GSE134809, features = top5_markers)
+library(scRNAtoolVis)
+AverageHeatmap(object =Fibroblasts_CD_GSE134809,
+               markerGene = c("HLA-DRA","CD74",top5_markers),
+               showRowNames = T)
+
+
+#########UMAP
+library(ggplot2)
+t1 <- DimPlot(Fibroblasts_CD_GSE134809, reduction = 'umap', 
+              cols = newcolour , #设置颜色
+              repel = T,  #label不重叠
+              label.size = 5, #调整label的大小
+              label = TRUE,  #是否展示label
+              pt.size = 0.7) +theme_dr(xlength = 0.2, 
+                                       ylength = 0.3,
+                                       arrow = arrow(length = unit(0.2, "inches"),type = "closed")) +
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(hjust = 0.03)) +
+  NoLegend()+theme(text=element_text(size=12,  family="serif"))
+t1
+ggsave("umap.pdf",t1,height = 5.8,width = 6.8)
+
+
+
+
+###细胞比例
+Cellratio <- prop.table(table(Idents(Fibroblasts_CD_GSE134809), Fibroblasts_CD_GSE134809$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+
+
+#分组
+group_table <- as.data.frame(table(Fibroblasts_CD_GSE134809@meta.data$group,Idents(Fibroblasts_CD_GSE134809)))
+names(group_table) <- c("group","celltype","CellNumber")
+plot_group<-ggplot(group_table,aes(x=group,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        #text=element_text(size=16,  family="serif"),##改变字体Time 
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =16)
+  )+labs(y="Percentage")
+plot_group
+
+
+#########top200gene
+topgene <-markers_CD  %>% group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+group <- data.frame(gene=topgene$gene,
+                    group=topgene$cluster)
+
+data_GO <- compareCluster(
+  gene~group, 
+  data=group, 
+  fun="enrichGO", 
+  OrgDb="org.Hs.eg.db",
+  keyType = "SYMBOL",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.05
+)
+library(ClusterGVis)
+library(clusterProfiler)
+data_GO_sim <- clusterProfiler::simplify(data_GO, 
+                                         cutoff=0.7, 
+                                         by="p.adjust", 
+                                         select_fun=min)
+p1 <- dotplot(data_GO_sim, showCategory=5,font.size = 8)
+p1 <- dotplot(data_Go_sim, showCategory=5,font.size = 8)
+data_GO_sim_fil <- data_GO_sim@compareClusterResult
+
+
+###ggplot美化
+df_GO <- p1$data
+library(forcats)
+df_GO$Description <- as.factor(df_GO$Description)
+df_GO$Description <- fct_inorder(df_GO$Description)
+
+
+ggplot(df_GO, aes(Description,Cluster)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+plan("multisession", workers = 1)
+##########   特应性皮炎 AD----
+
+library(harmony)
+Fibroblasts_GSE147424_AD <- NormalizeData(Fibroblasts_GSE147424_AD)
+Fibroblasts_GSE147424_AD <- FindVariableFeatures(Fibroblasts_GSE147424_AD, selection.method = "vst", nfeatures = 2000)
+Fibroblasts_GSE147424_AD <- ScaleData(Fibroblasts_GSE147424_AD, verbose = F)
+Fibroblasts_GSE147424_AD <- RunPCA(Fibroblasts_GSE147424_AD, verbose = FALSE)
+Fibroblasts_GSE147424_AD <- RunHarmony(Fibroblasts_GSE147424_AD,c("orig.ident"))#"dataset" 
+ElbowPlot(Fibroblasts_GSE147424_AD, ndims = 20)
+Fibroblasts_GSE147424_AD <- RunUMAP(Fibroblasts_GSE147424_AD, reduction = "harmony", dims = 1:10)
+Fibroblasts_GSE147424_AD <- FindNeighbors(Fibroblasts_GSE147424_AD, reduction = "harmony", dims = 1:10)
+Fibroblasts_GSE147424_AD <- FindClusters(Fibroblasts_GSE147424_AD, resolution = 0.5)
+DimPlot(Fibroblasts_GSE147424_AD,label = T)
+library(scCustomize)
+mycolor<-colorRampPalette(c("#B4C4E5","firebrick3"))(30)
+mycolor<-colorRampPalette(c("blue","firebrick3"))(30)
+Plot_Density_Joint_Only(seurat_object = Fibroblasts_GSE147424_AD, 
+                        features = c("CD74", "HLA-DRA"),
+                        custom_palette = mycolor)
+plan("multisession", workers = 10)
+markers_AD<- FindAllMarkers(Fibroblasts_GSE147424_AD)
+plan("multisession", workers = 1)
+
+###细胞命名
+Fibroblasts_GSE147424_AD <-
+  RenameIdents(
+    Fibroblasts_GSE147424_AD,
+    `0` = "Fb_APOC1",
+    `1` = "Fb_SLPI",
+    `2` = "Fb_ABCA10",
+    `3` = "Fb_CD74",
+    `4` = "Fb_SVEP1",
+    `5` = "Fb_DPEP1",
+    `6` = "Fb_KRT14",
+    `7` = "Fb_COCH",
+    `8` = "Fb_INHBA")
+Fibroblasts_GSE147424_AD <-
+  RenameIdents(
+    Fibroblasts_GSE147424_AD,
+    `Fb_CD74` = "Fb_CD74 (AP-Fb)")
+###细胞比例
+Cellratio <- prop.table(table(Idents(Fibroblasts_GSE147424_AD),Fibroblasts_GSE147424_AD$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+allcolour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#F08080","#8B4513","#1E90FF","#7CFC00","#FFFF00",
+            "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
+            "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
+            "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887","#98FB98")
+#allcolour=c("#0000FF","#20B2AA","#FFA500","#9370DB","#DC143C","#8B4513","#F08080","#1E90FF","#7CFC00")
+p <- ggplot(Cellratio) + 
+  geom_bar(aes(x=factor(Var2,levels =c("AD_Healthy","AD_Non-lesional","AD_Lesional")), y= Freq, fill = Var1),stat = "identity",width = 0.7,size = 0.5,colour = '#222222')+ 
+  theme_classic() +
+  labs(x='disease',y = 'Ratio')+
+  scale_fill_manual(values = allcolour)+
+  theme(panel.border = element_rect(fill=NA,color="black", size=0.5, linetype="solid"))+
+  theme(axis.title =  element_text(size=12), # 调整横纵坐标轴标题字号并设置为粗体
+        axis.text.x =   element_text(size=12)) 
+p
+library(tidydr)
+library(ggplot2)
+t1 <- DimPlot(Fibroblasts_GSE147424_AD_named, reduction = 'umap', 
+              cols = newcolour , #设置颜色
+              repel = T,  #label不重叠
+              label.size = 8, #调整label的大小
+              label = TRUE,  #是否展示label
+              pt.size = 0.7) +theme_dr(xlength = 0.2, 
+                                       ylength = 0.3,
+                                       arrow = arrow(length = unit(0.2, "inches"),type = "closed")) +
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(hjust = 0.03)) +
+  NoLegend()+theme(text=element_text(size=12,  family="serif"))
+t1
+ggsave("umap.pdf",t1,height = 5.8,width = 6.8)
+###细胞比例
+Cellratio <- prop.table(table(Idents(Fibroblasts_GSE147424_AD), Fibroblasts_GSE147424_AD$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+
+allcolour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#F08080","#8B4513","#1E90FF","#7CFC00","#FFFF00",
+            "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
+            "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
+            "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887","#98FB98")
+
+newcolour=c("#8ECFC9","#FFBE7A","#FA7F6F","#82B0D2","#BEB8DC","#E7DAD2","#2878b5","#9ac9db","#f8ac8c","#c82423","#ff8884","#A1A9D0",
+            "#F0988C","#B883D4","#9E9E9E","#CFEAF1","#C4A5DE","#F6CAE5","#96CCCB")
+newcolour=c("#8ECFC9","#FFBE7A","#FA7F6F", "#F6CAE5","#82B0D2","#BEB8DC","#E7DAD2","#2878b5","#c82423","#F0988C","#B883D4","#9E9E9E","#82B0D2")
+
+###改变donor顺序
+#my_levels <- c("donor7","donor8","donor9","donor10","donor11","donor12","donor1","donor2","donor3","donor4","donor13","donor14")
+#Fibroblasts_GSE147424_AD$sampleID <- factor(Fibroblasts_GSE147424_AD$sampleID, levels= my_levels)
+
+#分样本
+my_levels <- c("AD_Healthy","AD_Non-lesional","AD_Lesional")
+Fibroblasts_GSE147424_AD$group<- factor(Fibroblasts_GSE147424_AD$group, levels= my_levels)
+sample_table <- as.data.frame(table(Fibroblasts_GSE147424_AD@meta.data$orig.ident,Idents(Fibroblasts_GSE147424_AD)))
+names(sample_table) <- c("Samples","celltype","CellNumber")
+
+plot_sample<-ggplot(sample_table,aes(x=Samples,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =12)
+  )+labs(y="Percentage")+RotatedAxis()
+plot_sample
+
+#分组
+group_table <- as.data.frame(table(Fibroblasts_GSE147424_AD@meta.data$group,Idents(Fibroblasts_GSE147424_AD)))
+names(group_table) <- c("group","celltype","CellNumber")
+plot_group<-ggplot(group_table,aes(x=group,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14,angle = 30,hjust =1, vjust=1),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        #text=element_text(size=16,  family="serif"),##改变字体Time 
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =16)
+  )+labs(y="Percentage")
+plot_group
+
+p1 <-plot_sample + plot_group + 
+  plot_layout(widths = c(2, 1))
+
+ggsave("细胞比例组合图.pdf",p1)
+
+####亚群高表达基因热图
+top5_markers <- Extract_Top_Markers(marker_dataframe = markers_AD, num_genes = 5, named_vector = FALSE,
+                                    make_unique = TRUE)
+
+Clustered_DotPlot(seurat_object = Fibroblasts_GSE147424_AD, features = top5_markers)
+library(scRNAtoolVis)
+AverageHeatmap(object =Fibroblasts_GSE147424_AD,
+               markerGene = c("HLA-DRA","CD74",top5_markers),row_names_side = "",fontsize = 11,
+               showRowNames = T)
+
+
+
+###########GO富集分析
+
+#########top200gene
+topgene <-markers_AD  %>% group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+group <- data.frame(gene=topgene$gene,
+                    group=topgene$cluster)
+
+data_GO <- compareCluster(
+  gene~group, 
+  data=group, 
+  fun="enrichGO", 
+  OrgDb="org.Hs.eg.db",
+  keyType = "SYMBOL",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.05
+)
+library(ClusterGVis)
+library(clusterProfiler)
+data_GO_sim <- clusterProfiler::simplify(data_GO, 
+                                         cutoff=0.7, 
+                                         by="p.adjust", 
+                                         select_fun=min)
+p1 <- dotplot(data_GO_sim, showCategory=5,font.size = 8)
+p1 <- dotplot(data_Go_sim, showCategory=5,font.size = 8)
+data_GO_sim_fil <- data_GO_sim@compareClusterResult
+
+
+###ggplot美化
+df_GO <- p1$data
+library(forcats)
+df_GO$Description <- as.factor(df_GO$Description)
+df_GO$Description <- fct_inorder(df_GO$Description)
+
+
+ggplot(df_GO, aes(Description,group)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x.top = element_text(angle=45,hjust = 0,vjust=0),###########调整x轴的位置在top
+        axis.text = element_text(color = 'black', size = 11),
+        axis.title.y.right = element_text(hjust = 1,vjust = -1),  # 调整y轴标题的位置
+        axis.text.y.right = element_text(vjust = 0.5)) +      # 调整y轴刻度标签的位置)+
+  scale_x_discrete(position = "top") + scale_y_discrete(position = "right") +
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+
+
+
+
+
+fgseaRes <- fgseaRes %>% as_tibble() %>% arrange(desc(NES)) %>% filter(pval < 0.05) %>% head(n= 20)
+ggplot(fgseaRes %>% as_tibble() %>% arrange(desc(NES)) %>% filter(pval < 0.05) %>% head(n= 20), aes(pathway,NES)) +
+  geom_point(aes(fill=pval, size=NES), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+ggplot(fgseaRes , aes(pathway,NES)) +
+  geom_point(aes(fill=pval, size=NES), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=0,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+
+
+
+
+
+
+############# UC溃结----
+library(harmony)
+SCP259_UC_Fibroblast <- NormalizeData(SCP259_UC_Fibroblast)
+SCP259_UC_Fibroblast <- FindVariableFeatures(SCP259_UC_Fibroblast, selection.method = "vst", nfeatures = 2000)
+SCP259_UC_Fibroblast <- ScaleData(SCP259_UC_Fibroblast, verbose = F)
+SCP259_UC_Fibroblast <- RunPCA(SCP259_UC_Fibroblast, verbose = FALSE)
+SCP259_UC_Fibroblast <- RunHarmony(SCP259_UC_Fibroblast,c("orig.ident"))#"dataset" 
+ElbowPlot(SCP259_UC_Fibroblast, ndims = 20)
+SCP259_UC_Fibroblast <- RunUMAP(SCP259_UC_Fibroblast, reduction = "harmony", dims = 1:15)
+SCP259_UC_Fibroblast <- FindNeighbors(SCP259_UC_Fibroblast, reduction = "harmony", dims = 1:15)
+SCP259_UC_Fibroblast <- FindClusters(SCP259_UC_Fibroblast, resolution = 0.5)
+DimPlot(SCP259_UC_Fibroblast,label = T)
+library(scCustomize)
+mycolor<-colorRampPalette(c("#B4C4E5","firebrick3"))(30)
+mycolor<-colorRampPalette(c("blue","firebrick3"))(30)
+Plot_Density_Joint_Only(seurat_object = SCP259_UC_Fibroblast, 
+                        features = c("CD74", "HLA-DRA"),
+                        custom_palette = mycolor)
+plan("multisession", workers = 10)
+markers_UC<- FindAllMarkers(SCP259_UC_Fibroblast)
+plan("multisession", workers = 1)
+
+###细胞命名
+SCP259_UC_Fibroblast <-
+  RenameIdents(
+    SCP259_UC_Fibroblast,
+    `0` = "WNT2B+ Fos-lo Fb1",
+    `1` = "WNT5B+ Fb",
+    `2` = "WNT2B+ Fos-hi Fb",
+    `3` = "WNT2B+ Fos-lo Fb2",
+    `4` = "Myofibroblasts",
+    `5` = "WNT5B+ Fb",
+    `6` = "CXCL1+ Fb",
+    `7` = "CD74+ Fb (AP-Fb)",
+    `8` = "CD74+ Fb (AP-Fb)",
+    `9` = "Myofibroblasts")
+
+SCP259_UC_Fibroblast <-
+  RenameIdents(
+    SCP259_UC_Fibroblast,
+    `CD74+ Fb (AP-Fb)` = "CD74+ Fb (AP-Fb)")
+
+###细胞比例
+Cellratio <- prop.table(table(Idents(SCP259_UC_Fibroblast),SCP259_UC_Fibroblast$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+
+
+
+library(ggplot2)
+t1 <- DimPlot(SCP259_UC_Fibroblast, reduction = 'umap', 
+              cols = newcolour , #设置颜色
+              repel = T,  #label不重叠
+              label.size = 7, #调整label的大小
+              label = TRUE,  #是否展示label
+              pt.size = 0.7) +theme_dr(xlength = 0.2, 
+                                       ylength = 0.3,
+                                       arrow = arrow(length = unit(0.2, "inches"),type = "closed")) +
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(hjust = 0.03)) +
+  NoLegend()+theme(text=element_text(size=12,  family="serif"))
+t1
+ggsave("umap.pdf",t1,height = 5.8,width = 6.8)
+###细胞比例
+Cellratio <- prop.table(table(Idents(SCP259_UC_Fibroblast), SCP259_UC_Fibroblast$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+
+allcolour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#F08080","#8B4513","#1E90FF","#7CFC00","#FFFF00",
+            "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
+            "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
+            "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887","#98FB98")
+
+newcolour=c("#8ECFC9","#FFBE7A","#FA7F6F","#82B0D2","#BEB8DC","#E7DAD2","#2878b5","#9ac9db","#f8ac8c","#c82423","#ff8884","#A1A9D0",
+            "#F0988C","#B883D4","#9E9E9E","#CFEAF1","#C4A5DE","#F6CAE5","#96CCCB")
+newcolour=c("#8ECFC9","#FFBE7A","#FA7F6F", "#F6CAE5","#82B0D2","#BEB8DC","#E7DAD2","#2878b5","#c82423","#F0988C","#B883D4","#9E9E9E","#82B0D2")
+
+
+###改变donor顺序
+#my_levels <- c("donor7","donor8","donor9","donor10","donor11","donor12","donor1","donor2","donor3","donor4","donor13","donor14")
+#SCP259_UC_Fibroblast$sampleID <- factor(SCP259_UC_Fibroblast$sampleID, levels= my_levels)
+
+#分样本
+my_levels <- c("AD_Healthy","AD_Non-lesional","AD_Lesional")
+SCP259_UC_Fibroblast$group<- factor(SCP259_UC_Fibroblast$group, levels= my_levels)
+sample_table <- as.data.frame(table(SCP259_UC_Fibroblast@meta.data$orig.ident,Idents(SCP259_UC_Fibroblast)))
+names(sample_table) <- c("Samples","celltype","CellNumber")
+
+plot_sample<-ggplot(sample_table,aes(x=Samples,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =12)
+  )+labs(y="Percentage")+RotatedAxis()
+plot_sample
+
+#分组
+group_table <- as.data.frame(table(SCP259_UC_Fibroblast@meta.data$group,Idents(SCP259_UC_Fibroblast)))
+names(group_table) <- c("group","celltype","CellNumber")
+plot_group<-ggplot(group_table,aes(x=group,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14,angle = 30,hjust =1, vjust=1),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        #text=element_text(size=16,  family="serif"),##改变字体Time 
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =16)
+  )+labs(y="Percentage")
+plot_group
+
+p1 <-plot_sample + plot_group + 
+  plot_layout(widths = c(2, 1))
+
+ggsave("细胞比例组合图.pdf",p1)
+
+####亚群高表达基因热图
+top5_markers <- Extract_Top_Markers(marker_dataframe = markers_UC, num_genes = 5, named_vector = FALSE,
+                                    make_unique = TRUE)
+
+#Clustered_DotPlot(seurat_object = SCP259_UC_Fibroblast, features = top5_markers)
+library(scRNAtoolVis)
+AverageHeatmap(object =SCP259_UC_Fibroblast,
+               markerGene = c("HLA-DRA","CD74",top5_markers),
+               showRowNames = T)
+
+
+
+###########GO富集分析
+
+#########top200gene
+topgene <-markers_UC  %>% group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+group <- data.frame(gene=topgene$gene,
+                    group=topgene$cluster)
+
+data_GO <- compareCluster(
+  gene~group, 
+  data=group, 
+  fun="enrichGO", 
+  OrgDb="org.Hs.eg.db",
+  keyType = "SYMBOL",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.05
+)
+library(ClusterGVis)
+library(clusterProfiler)
+data_GO_sim <- clusterProfiler::simplify(data_GO, 
+                                         cutoff=0.7, 
+                                         by="p.adjust", 
+                                         select_fun=min)
+p1 <- dotplot(data_GO_sim, showCategory=5,font.size = 8)
+p1 <- dotplot(data_Go_sim, showCategory=5,font.size = 8)
+data_GO_sim_fil <- data_GO_sim@compareClusterResult
+
+
+###ggplot美化
+df_GO <- p1$data
+library(forcats)
+df_GO$Description <- as.factor(df_GO$Description)
+df_GO$Description <- fct_inorder(df_GO$Description)
+
+
+ggplot(df_GO, aes(Description,Cluster)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+ggplot(GO, aes(Description,group)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x.top = element_text(angle=45,hjust = 0,vjust=0),###########调整x轴的位置在top
+        axis.text = element_text(color = 'black', size = 11),
+        axis.title.y.right = element_text(hjust = 1,vjust = -1),  # 调整y轴标题的位置
+        axis.text.y.right = element_text(vjust = 0.5)) +      # 调整y轴刻度标签的位置)+
+  scale_x_discrete(position = "top") + scale_y_discrete(position = "right") +
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#########SLE-Skin----
+library(harmony)
+skin_SLE_GSE186476_Fibroblasts <- NormalizeData(skin_SLE_GSE186476_Fibroblasts)
+skin_SLE_GSE186476_Fibroblasts <- FindVariableFeatures(skin_SLE_GSE186476_Fibroblasts, selection.method = "vst", nfeatures = 2000)
+skin_SLE_GSE186476_Fibroblasts <- ScaleData(skin_SLE_GSE186476_Fibroblasts, verbose = F)
+skin_SLE_GSE186476_Fibroblasts <- RunPCA(skin_SLE_GSE186476_Fibroblasts, verbose = FALSE)
+skin_SLE_GSE186476_Fibroblasts <- RunHarmony(skin_SLE_GSE186476_Fibroblasts,c("orig.ident"))#"dataset" 
+ElbowPlot(skin_SLE_GSE186476_Fibroblasts, ndims = 20)
+skin_SLE_GSE186476_Fibroblasts <- RunUMAP(skin_SLE_GSE186476_Fibroblasts, reduction = "harmony", dims = 1:15)
+skin_SLE_GSE186476_Fibroblasts <- FindNeighbors(skin_SLE_GSE186476_Fibroblasts, reduction = "harmony", dims = 1:15)
+skin_SLE_GSE186476_Fibroblasts <- FindClusters(skin_SLE_GSE186476_Fibroblasts, resolution = 0.5)
+DimPlot(skin_SLE_GSE186476_Fibroblasts,label = T)
+library(scCustomize)
+mycolor<-colorRampPalette(c("#B4C4E5","firebrick3"))(30)
+mycolor<-colorRampPalette(c("blue","firebrick3"))(30)
+Plot_Density_Joint_Only(seurat_object = skin_SLE_GSE186476_Fibroblasts, 
+                        features = c("CD74", "HLA-DRA"),
+                        custom_palette = mycolor)
+plan("multisession", workers = 10)
+markers_SLEskin<- FindAllMarkers(skin_SLE_GSE186476_Fibroblasts)
+plan("multisession", workers = 1)
+
+###细胞命名
+skin_SLE_GSE186476_Fibroblasts <-
+  RenameIdents(
+    skin_SLE_GSE186476_Fibroblasts,
+    `0` = "CD74+ Fb (AP-Fb)",
+    `1` = "COMP+ Fb",
+    `2` = "WISP2+ Fb",
+    `3` = "CXCL2+ Fb",
+    `4` = "COL11A1+ Fb",
+    `5` = "MTRNR2L12+ Fb",
+    `6` = "APOD+ Fb",
+    `7` = "KRT5+ Fb",
+    `8` = "CD74+ Fb (AP-Fb)",
+    `9` = "KRT14+ Fb",
+    `10` = "COCH+ Fb",
+    `11` = "ANGPTL7+ Fb",
+    `12` = "CCL19+ Fb",
+    `13` = "TAGLN+ Fb")
+
+skin_SLE_GSE186476_Fibroblasts <-
+  RenameIdents(
+    skin_SLE_GSE186476_Fibroblasts,
+    `CD74+ Fb (AP-Fb)` = "CD74+ Fb (AP-Fb)")
+
+###细胞比例
+Cellratio <- prop.table(table(Idents(skin_SLE_GSE186476_Fibroblasts),skin_SLE_GSE186476_Fibroblasts$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+
+
+
+library(ggplot2)
+t1 <- DimPlot(skin_SLE_GSE186476_Fibroblasts, reduction = 'umap', 
+              cols = newcolour , #设置颜色
+              repel = T,  #label不重叠
+              label.size = 5, #调整label的大小
+              label = TRUE,  #是否展示label
+              pt.size = 0.7) +theme_dr(xlength = 0.2, 
+                                       ylength = 0.3,
+                                       arrow = arrow(length = unit(0.2, "inches"),type = "closed")) +
+  theme(panel.grid = element_blank(),
+        axis.title = element_text(hjust = 0.03)) +
+  NoLegend()+theme(text=element_text(size=12,  family="serif"))
+t1
+ggsave("umap.pdf",t1,height = 5.8,width = 6.8)
+###细胞比例
+Cellratio <- prop.table(table(Idents(skin_SLE_GSE186476_Fibroblasts), skin_SLE_GSE186476_Fibroblasts$group), margin = 2)#计算各组样本不同细胞群比例
+Cellratio <- as.data.frame(Cellratio)
+
+allcolour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#F08080","#8B4513","#1E90FF","#7CFC00","#FFFF00",
+            "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
+            "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
+            "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887","#98FB98")
+
+newcolour=c("#8ECFC9","#FFBE7A","#FA7F6F","#82B0D2","#BEB8DC","#E7DAD2","#2878b5","#9ac9db","#f8ac8c","#c82423","#ff8884","#A1A9D0",
+            "#F0988C","#B883D4","#9E9E9E","#CFEAF1","#C4A5DE","#F6CAE5","#96CCCB")
+newcolour=c("#8ECFC9","#FFBE7A","#FA7F6F", "#F6CAE5","#82B0D2","#BEB8DC","#E7DAD2","#2878b5","#c82423","#F0988C","#B883D4","#9E9E9E","#82B0D2")
+
+
+###改变donor顺序
+#my_levels <- c("donor7","donor8","donor9","donor10","donor11","donor12","donor1","donor2","donor3","donor4","donor13","donor14")
+#skin_SLE_GSE186476_Fibroblasts$sampleID <- factor(skin_SLE_GSE186476_Fibroblasts$sampleID, levels= my_levels)
+
+#分样本
+my_levels <- c("AD_Healthy","AD_Non-lesional","AD_Lesional")
+skin_SLE_GSE186476_Fibroblasts$group<- factor(skin_SLE_GSE186476_Fibroblasts$group, levels= my_levels)
+sample_table <- as.data.frame(table(skin_SLE_GSE186476_Fibroblasts@meta.data$orig.ident,Idents(skin_SLE_GSE186476_Fibroblasts)))
+names(sample_table) <- c("Samples","celltype","CellNumber")
+
+plot_sample<-ggplot(sample_table,aes(x=Samples,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =12)
+  )+labs(y="Percentage")+RotatedAxis()
+plot_sample
+
+#分组
+group_table <- as.data.frame(table(skin_SLE_GSE186476_Fibroblasts@meta.data$group,Idents(skin_SLE_GSE186476_Fibroblasts)))
+names(group_table) <- c("group","celltype","CellNumber")
+plot_group<-ggplot(group_table,aes(x=group,weight=CellNumber,fill=celltype))+
+  geom_bar(position="fill")+
+  scale_fill_manual(values=newcolour) + 
+  theme(panel.grid = element_blank(),
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        axis.line.x = element_line(colour = "black") ,
+        axis.line.y = element_line(colour = "black") ,
+        axis.text.x =element_text(size=14),
+        axis.text.y = element_text(size = 14),
+        axis.title.x =element_text(size=14),
+        axis.title.y =element_text(size=14),
+        legend.text = element_text(size = 12),
+        axis.title = element_text(size = 14),
+        #text=element_text(size=16,  family="serif"),##改变字体Time 
+        plot.title = element_text(lineheight=.8, face="bold", hjust=0.5, size =16)
+  )+labs(y="Percentage")
+plot_group
+
+p1 <-plot_sample + plot_group + 
+  plot_layout(widths = c(2, 1))
+
+ggsave("细胞比例组合图.pdf",p1)
+
+####亚群高表达基因热图
+top5_markers <- Extract_Top_Markers(marker_dataframe = markers_UC, num_genes = 5, named_vector = FALSE,
+                                    make_unique = TRUE)
+
+#Clustered_DotPlot(seurat_object = skin_SLE_GSE186476_Fibroblasts, features = top5_markers)
+library(scRNAtoolVis)
+AverageHeatmap(object =skin_SLE_GSE186476_Fibroblasts,
+               markerGene = c("HLA-DRA","CD74",top5_markers),
+               showRowNames = T)
+
+
+
+###########GO富集分析
+
+#########top200gene
+topgene <-markers_UC  %>% group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+group <- data.frame(gene=topgene$gene,
+                    group=topgene$cluster)
+
+data_GO <- compareCluster(
+  gene~group, 
+  data=group, 
+  fun="enrichGO", 
+  OrgDb="org.Hs.eg.db",
+  keyType = "SYMBOL",
+  ont = "BP",
+  pAdjustMethod = "BH",
+  pvalueCutoff = 0.05,
+  qvalueCutoff = 0.05
+)
+library(ClusterGVis)
+library(clusterProfiler)
+data_GO_sim <- clusterProfiler::simplify(data_GO, 
+                                         cutoff=0.7, 
+                                         by="p.adjust", 
+                                         select_fun=min)
+p1 <- dotplot(data_GO_sim, showCategory=5,font.size = 8)
+p1 <- dotplot(data_Go_sim, showCategory=5,font.size = 8)
+data_GO_sim_fil <- data_GO_sim@compareClusterResult
+
+
+###ggplot美化
+df_GO <- p1$data
+library(forcats)
+df_GO$Description <- as.factor(df_GO$Description)
+df_GO$Description <- fct_inorder(df_GO$Description)
+
+
+ggplot(df_GO, aes(Description,Cluster)) +
+  geom_point(aes(fill=p.adjust, size=Count), shape=21)+
+  theme_bw()+
+  theme(axis.text.x=element_text(angle=90,hjust = 1,vjust=0.5),
+        axis.text = element_text(color = 'black', size = 10))+
+  scale_fill_gradient(low="purple",high="yellow")+
+  labs(x=NULL,y=NULL)+
+  coord_flip()
+
+
+
+
+
+averageHeatmap <- function(
+  object = NULL,
+  markerGene = NULL,
+  group.by = "ident",
+  assays = "RNA",
+  slot = "data",
+  htCol = c("#0099CC", "white", "#CC0033"),
+  colseed = 666,
+  htRange = c(-2, 0, 2),
+  annoCol = FALSE,
+  myanCol = NULL,
+  annoColType = "light",
+  annoColTypeAlpha = 0,
+  row_title = "Cluster top Marker genes",
+  clusterAnnoName = TRUE,
+  showRowNames = TRUE,
+  row_names_side = "left",
+  markGenes = NULL,
+  border = FALSE,
+  fontsize = 10,
+  column_names_rot = 45,
+  width = NULL,
+  height = NULL,
+  cluster.order = NULL,
+  cluster_columns = FALSE,
+  cluster_rows = FALSE,
+  gene.order = NULL,
+  ...) {
+  # get cells mean gene expression
+  # check Seurat version first
+  if(utils::packageVersion("Seurat") > 4){
+    mean_gene_exp <- as.matrix(
+      data.frame(
+        Seurat::AverageExpression(object,
+                                  features = markerGene,
+                                  group.by = group.by,
+                                  assays = assays,
+                                  layer = slot
+        )
+      )
+    )
+  }else{
+    mean_gene_exp <- as.matrix(
+      data.frame(
+        Seurat::AverageExpression(object,
+                                  features = markerGene,
+                                  group.by = group.by,
+                                  assays = assays,
+                                  slot = slot
+        )
+      )
+    )
+  }
+  
+  # add colnames
+  # name1 <- gsub(
+  #   pattern = paste0(assays, ".", sep = ""),
+  #   replacement = "",
+  #   colnames(mean_gene_exp)
+  # )
+  #
+  # colnames(mean_gene_exp) <- gsub(
+  #   pattern = "\\.",
+  #   replacement = " ", name1
+  # )
+  
+  colnames(mean_gene_exp) <- levels(Seurat::Idents(object))
+  
+  # Z-score
+  htdf <- t(scale(t(mean_gene_exp), scale = TRUE, center = TRUE))
+  
+  # cluster order
+  if (!is.null(cluster.order)) {
+    htdf <- htdf[, cluster.order]
+  }
+  
+  # gene order
+  if (!is.null(gene.order)) {
+    htdf <- htdf[gene.order, ]
+  }
+  
+  # color
+  
+  # anno color
+  if (annoCol == FALSE) {
+    set.seed(colseed)
+    anno_col <- circlize::rand_color(
+      ncol(htdf),
+      luminosity = annoColType,
+      transparency = annoColTypeAlpha
+    )
+    print(c("Your cluster annotation color is:", anno_col))
+  } else if (annoCol == TRUE) {
+    # give your own color vectors
+    anno_col <- myanCol
+  } else {
+    print("Give TRUE or FALSE paramters!")
+  }
+  names(anno_col) <- colnames(htdf)
+  
+  # top annotation
+  column_ha <- ComplexHeatmap::HeatmapAnnotation(
+    cluster = colnames(htdf),
+    show_legend = FALSE,
+    show_annotation_name = clusterAnnoName,
+    col = list(cluster = anno_col)
+  )
+  
+  # whether mark your genes on plot
+  if (!is.null(markGenes)) {
+    # all genes
+    rowGene <- rownames(htdf)
+    
+    # tartget gene
+    annoGene <- markGenes
+    
+    # get target gene index
+    index <- match(annoGene, rowGene)
+    
+    # some genes annotation
+    geneMark <- ComplexHeatmap::rowAnnotation(
+      gene = ComplexHeatmap::anno_mark(
+        at = index,
+        labels = annoGene,
+        labels_gp = grid::gpar(
+          fontface = "italic",
+          fontsize = fontsize
+        )
+      ),
+      ...
+    )
+    
+    right_annotation <- geneMark
+  } else {
+    right_annotation <- NULL
+  }
+  
+  # control heatmap width and height
+  if (is.null(width) || is.null(height)) {
+    # plot
+    ComplexHeatmap::Heatmap(
+      htdf,
+      name = "Z-score",
+      cluster_columns = cluster_columns,
+      cluster_rows = cluster_rows,
+      row_title = row_title,
+      # column_title = "Clusters",
+      right_annotation = right_annotation,
+      show_row_names = showRowNames,
+      row_names_gp = grid::gpar(
+        fontface = "italic",
+        fontsize = fontsize
+      ),
+      row_names_side = row_names_side,
+      border = border,
+      column_names_side = "down",
+      column_names_rot = column_names_rot,
+      top_annotation = column_ha,
+      col = col_fun,
+      ...
+    )
+  } else {
+    # plot
+    ComplexHeatmap::Heatmap(
+      htdf,
+      name = "Z-score",
+      cluster_columns = FALSE,
+      cluster_rows = FALSE,
+      row_title = row_title,
+      # column_title = "Clusters",
+      right_annotation = right_annotation,
+      show_row_names = showRowNames,
+      row_names_gp = grid::gpar(
+        fontface = "italic",
+        fontsize = fontsize
+      ),
+      row_names_side = row_names_side,
+      border = border,
+      column_names_side = "down",
+      column_names_rot = column_names_rot,
+      top_annotation = column_ha,
+      col = newcolour,
+      width = ggplot2::unit(width, "cm"),
+      height = ggplot2::unit(height, "cm"),
+      ...
+    )
+  }
+}
